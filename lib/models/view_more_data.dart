@@ -37,8 +37,8 @@ class ViewMoreResponse {
             return DashboardOrder.fromJson(oMap);
           }).toList();
 
-          final approvedTotal = _parseDouble(value['approved_total']);
-          final approvedCount = _parseInt(value['approved_count']);
+          final approvedTotal = _parseDouble(value['approved_total'] ?? value['total_amount']);
+          final approvedCount = _parseInt(value['approved_count'] ?? value['order_count']);
 
           monthsList.add(ViewMoreMonth(
             monthName: monthKey?.toString() ?? '',

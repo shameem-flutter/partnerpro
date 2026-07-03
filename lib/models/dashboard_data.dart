@@ -58,6 +58,7 @@ class DashboardData {
 
 class DashboardOrder {
   const DashboardOrder({
+    this.id,
     required this.invoiceDate,
     required this.platform,
     required this.invoiceReferenceNo,
@@ -71,6 +72,7 @@ class DashboardOrder {
     required this.isApproved,
   });
 
+  final int? id;
   final String invoiceDate;
   final String platform;
   final String invoiceReferenceNo;
@@ -96,17 +98,27 @@ class DashboardOrder {
     List<ReferralDetail> parsedReferrals =
         referralsList.map((r) => ReferralDetail.fromJson(r)).toList();
 
+    double commSum = 0.0;
+    for (var d in parsedDetails) {
+      commSum += d.commissionAmount;
+    }
+    double parsedComm = _parseDouble(json['commission_amount_total']);
+    if (parsedComm == 0.0) {
+      parsedComm = commSum;
+    }
+
     return DashboardOrder(
+      id: json['id'] is int ? json['id'] as int : (json['id'] != null ? int.tryParse(json['id'].toString()) : null),
       invoiceDate: json['invoice_date']?.toString() ?? '',
       platform: json['platform']?.toString() ?? '',
-      invoiceReferenceNo: json['invoice_reference_no']?.toString() ?? '',
+      invoiceReferenceNo: json['invoice_reference_no']?.toString() ?? json['name']?.toString() ?? '',
       customerName: json['customer_name']?.toString() ?? '',
-      salespersonName: json['salesperson_name']?.toString() ?? '',
+      salespersonName: json['salesperson_name']?.toString() ?? json['salesperson_email']?.toString() ?? json['salesperson_id']?.toString() ?? '',
       companyName: json['company_name']?.toString() ?? '',
       currency: json['currency']?.toString() ?? '',
       invoiceDetails: parsedDetails,
       referralDetails: parsedReferrals,
-      commissionAmountTotal: _parseDouble(json['commission_amount_total']),
+      commissionAmountTotal: parsedComm,
       isApproved: json['is_approved'] as bool? ?? json['is_approve'] as bool? ?? false,
     );
   }
@@ -125,6 +137,13 @@ class InvoiceDetail {
     required this.unitPrice,
     required this.subtotal,
     required this.isApproved,
+    this.id,
+    this.invoiceName,
+    this.invoiceDate,
+    this.paymentState,
+    this.amountTotal,
+    this.commissionPercentage,
+    this.commissionAmount = 0.0,
   });
 
   final String productName;
@@ -132,14 +151,30 @@ class InvoiceDetail {
   final double unitPrice;
   final double subtotal;
   final bool isApproved;
+  final int? id;
+  final String? invoiceName;
+  final String? invoiceDate;
+  final String? paymentState;
+  final double? amountTotal;
+  final double? commissionPercentage;
+  final double commissionAmount;
 
   factory InvoiceDetail.fromJson(Map<dynamic, dynamic> json) {
+    final double commAmount = _parseDouble(json['commission_amount']);
+    final double amtTotal = _parseDouble(json['amount_total']);
     return InvoiceDetail(
-      productName: json['product_name']?.toString() ?? '',
-      quantity: _parseInt(json['quantity']),
-      unitPrice: _parseDouble(json['unit_price']),
-      subtotal: _parseDouble(json['subtotal']),
+      productName: json['product_name']?.toString() ?? json['invoice_name']?.toString() ?? '',
+      quantity: _parseInt(json['quantity'] ?? 1),
+      unitPrice: _parseDouble(json['unit_price'] ?? json['amount_total']),
+      subtotal: _parseDouble(json['subtotal'] ?? json['amount_total']),
       isApproved: json['is_approved'] as bool? ?? json['is_approve'] as bool? ?? false,
+      id: _parseInt(json['id']),
+      invoiceName: json['invoice_name']?.toString(),
+      invoiceDate: json['invoice_date']?.toString(),
+      paymentState: json['payment_state']?.toString(),
+      amountTotal: amtTotal,
+      commissionPercentage: _parseDouble(json['commission_percentage']),
+      commissionAmount: commAmount,
     );
   }
 

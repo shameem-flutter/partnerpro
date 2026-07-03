@@ -20,8 +20,8 @@ class RedemptionService {
       final response = await _dio.post<dynamic>(
         convertUrl,
         data: {
-          'amount': amount,
-          'target_currency': currency,
+          'amount': amount.toStringAsFixed(2),
+          'currency': currency,
         },
         options: Options(
           headers: <String, String>{
@@ -43,11 +43,17 @@ class RedemptionService {
 
       return RedemptionResponse.fromJson(normalized);
     } on DioException catch (e) {
-      final responseBody = _normalizeMap(e.response?.data);
-      final message = _extractErrorMessage(
-        responseBody,
-        e.message ?? 'Failed to convert redemption. Please try again.',
-      );
+      dynamic errorData = e.response?.data;
+      if (errorData is String) {
+        try {
+          errorData = jsonDecode(errorData);
+        } catch (_) {}
+      }
+      final responseBody = _normalizeMap(errorData);
+      final defaultMsg = e.response != null
+          ? 'Failed to convert redemption. Server returned status code ${e.response?.statusCode}.'
+          : (e.message ?? 'Failed to convert redemption. Please try again.');
+      final message = _extractErrorMessage(responseBody, defaultMsg);
       throw Exception(message);
     } catch (e) {
       throw Exception('Failed to convert redemption: $e');
@@ -84,11 +90,17 @@ class RedemptionService {
         ),
       );
     } on DioException catch (e) {
-      final responseBody = _normalizeMap(e.response?.data);
-      final message = _extractErrorMessage(
-        responseBody,
-        e.message ?? 'Failed to submit redemption request. Please try again.',
-      );
+      dynamic errorData = e.response?.data;
+      if (errorData is String) {
+        try {
+          errorData = jsonDecode(errorData);
+        } catch (_) {}
+      }
+      final responseBody = _normalizeMap(errorData);
+      final defaultMsg = e.response != null
+          ? 'Failed to submit redemption request. Server returned status code ${e.response?.statusCode}.'
+          : (e.message ?? 'Failed to submit redemption request. Please try again.');
+      final message = _extractErrorMessage(responseBody, defaultMsg);
       throw Exception(message);
     } catch (e) {
       throw Exception('Failed to submit redemption request: $e');
@@ -122,11 +134,17 @@ class RedemptionService {
 
       return RedemptionBalanceResponse.fromJson(normalized);
     } on DioException catch (e) {
-      final responseBody = _normalizeMap(e.response?.data);
-      final message = _extractErrorMessage(
-        responseBody,
-        e.message ?? 'Failed to fetch redemption balance. Please try again.',
-      );
+      dynamic errorData = e.response?.data;
+      if (errorData is String) {
+        try {
+          errorData = jsonDecode(errorData);
+        } catch (_) {}
+      }
+      final responseBody = _normalizeMap(errorData);
+      final defaultMsg = e.response != null
+          ? 'Failed to fetch redemption balance. Server returned status code ${e.response?.statusCode}.'
+          : (e.message ?? 'Failed to fetch redemption balance. Please try again.');
+      final message = _extractErrorMessage(responseBody, defaultMsg);
       throw Exception(message);
     } catch (e) {
       throw Exception('Failed to fetch redemption balance: $e');
@@ -160,11 +178,17 @@ class RedemptionService {
 
       return SalesReportResponse.fromJson(normalized);
     } on DioException catch (e) {
-      final responseBody = _normalizeMap(e.response?.data);
-      final message = _extractErrorMessage(
-        responseBody,
-        e.message ?? 'Failed to fetch sales report. Please try again.',
-      );
+      dynamic errorData = e.response?.data;
+      if (errorData is String) {
+        try {
+          errorData = jsonDecode(errorData);
+        } catch (_) {}
+      }
+      final responseBody = _normalizeMap(errorData);
+      final defaultMsg = e.response != null
+          ? 'Failed to fetch sales report. Server returned status code ${e.response?.statusCode}.'
+          : (e.message ?? 'Failed to fetch sales report. Please try again.');
+      final message = _extractErrorMessage(responseBody, defaultMsg);
       throw Exception(message);
     } catch (e) {
       throw Exception('Failed to fetch sales report: $e');
@@ -189,6 +213,9 @@ class RedemptionService {
     if (responseBody == null) return defaultMessage;
     if (responseBody.containsKey('message')) {
       return responseBody['message'].toString();
+    }
+    if (responseBody.containsKey('error')) {
+      return responseBody['error'].toString();
     }
     for (final entry in responseBody.entries) {
       final key = entry.key;

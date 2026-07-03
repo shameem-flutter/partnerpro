@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/auth_user.dart';
-import '../models/dashboard_data.dart';
-import '../theme/app_colors.dart';
-import '../providers/auth_provider.dart';
-import '../providers/dashboard_provider.dart';
+import '../../models/auth_user.dart';
+import '../../models/dashboard_data.dart';
+import '../../theme/app_colors.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/dashboard_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key, required this.user});
@@ -22,15 +22,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final dashboardAsync = ref.watch(dashboardDataProvider);
+    final isEndUser = widget.user.userType == 'end_user';
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: AppColors.backgroundLight,
-        appBar: AppBar(
-          backgroundColor: AppColors.primaryBlue,
-          elevation: 0,
-          title: Column(
+    Widget mainContent(DashboardData data) {
+      if (isEndUser) {
+        return _buildDashboardContent(context, data, isReferral: false);
+      } else {
+        return TabBarView(
+          children: [
+            _buildDashboardContent(context, data, isReferral: false),
+            _buildDashboardContent(context, data, isReferral: true),
+          ],
+        );
+      }
+    }
+
+    final scaffold = Scaffold(
+      backgroundColor: AppColors.backgroundLight,
+      appBar: AppBar(
+        backgroundColor: AppColors.primaryBlue,
+        elevation: 0,
+        title: GestureDetector(
+          onTap: () {
+            ref.read(navigationProvider.notifier).state =
+                ActiveScreen.dashboard;
+          },
+          behavior: HitTestBehavior.opaque,
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
@@ -51,58 +69,90 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ],
           ),
-          actions: [
-            Text(
-              widget.user.displayName,
-              style: const TextStyle(color: Colors.white, fontSize: 18),
-            ),
-            const SizedBox(width: 10),
-            Builder(
-              builder: (context) => IconButton(
-                icon: const Icon(Icons.menu, color: Colors.white),
-                onPressed: () {
-                  Scaffold.of(context).openEndDrawer();
-                },
+        ),
+        actions: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.user.displayName,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          bottom: const TabBar(
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.white,
-            indicatorSize: TabBarIndicatorSize.tab,
-            tabs: [
-              Tab(text: 'Direct Orders'),
-              Tab(text: 'Referral Orders'),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white30, width: 0.5),
+                ),
+                child: Text(
+                  widget.user.formattedUserType.isNotEmpty
+                      ? widget.user.formattedUserType
+                      : 'Partner',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             ],
           ),
-        ),
-        endDrawer: _buildDrawer(context),
-        body: RefreshIndicator(
-          onRefresh: () => ref.refresh(dashboardDataProvider.future),
-          child: (() {
-            if (dashboardAsync.hasValue) {
-              final data = dashboardAsync.value!;
-              return TabBarView(
-                children: [
-                  _buildDashboardContent(context, data, isReferral: false),
-                  _buildDashboardContent(context, data, isReferral: true),
+          const SizedBox(width: 10),
+          Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu, color: Colors.white),
+              onPressed: () {
+                Scaffold.of(context).openEndDrawer();
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        bottom: isEndUser
+            ? null
+            : const TabBar(
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                indicatorColor: Colors.white,
+                indicatorSize: TabBarIndicatorSize.tab,
+                tabs: [
+                  Tab(text: 'Direct Orders'),
+                  Tab(text: 'Referral Orders'),
                 ],
-              );
-            } else if (dashboardAsync.isLoading) {
-              return const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+              ),
+      ),
+      endDrawer: _buildDrawer(context),
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(dashboardDataProvider.future),
+        child: (() {
+          if (dashboardAsync.hasValue) {
+            final data = dashboardAsync.value!;
+            return mainContent(data);
+          } else if (dashboardAsync.isLoading) {
+            return const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppColors.primaryBlue,
                 ),
-              );
-            } else {
-              return _buildErrorState(context, dashboardAsync.error?.toString() ?? 'Unknown error');
-            }
-          })(),
-        ),
+              ),
+            );
+          } else {
+            return _buildErrorState(
+              context,
+              dashboardAsync.error?.toString() ?? 'Unknown error',
+            );
+          }
+        })(),
       ),
     );
+
+    if (isEndUser) {
+      return scaffold;
+    }
+
+    return DefaultTabController(length: 2, child: scaffold);
   }
 
   Widget _buildDashboardContent(
@@ -113,7 +163,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final ordersList = isReferral ? data.referralOrders : data.orders;
     final displayLimit = isReferral ? _referralLimit : _directLimit;
 
-    final showList = displayLimit < ordersList.length ? ordersList.sublist(0, displayLimit) : ordersList;
+    final showList = displayLimit < ordersList.length
+        ? ordersList.sublist(0, displayLimit)
+        : ordersList;
 
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -131,11 +183,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 40),
                   child: Text(
-                    isReferral ? 'No referral orders found.' : 'No orders found.',
-                    style: TextStyle(
-                      color: AppColors.textGrey,
-                      fontSize: 16,
-                    ),
+                    isReferral
+                        ? 'No referral orders found.'
+                        : 'No orders found.',
+                    style: TextStyle(color: AppColors.textGrey, fontSize: 16),
                   ),
                 ),
               )
@@ -182,12 +233,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _buildSummaryCards(DashboardData data, {required bool isReferral}) {
-    final double commission = isReferral ? data.totalCommissionRef : data.totalCommission;
-    final int approved = isReferral ? data.refApprovedOrdersCount : data.approvedOrdersCount;
-    final int pending = isReferral ? data.refPendingOrdersCount : data.pendingOrdersCount;
+    final double commission = isReferral
+        ? data.totalCommissionRef
+        : data.totalCommission;
+    final int approved = isReferral
+        ? data.refApprovedOrdersCount
+        : data.approvedOrdersCount;
+    final int pending = isReferral
+        ? data.refPendingOrdersCount
+        : data.pendingOrdersCount;
 
     final ordersList = isReferral ? data.referralOrders : data.orders;
-    final String orderCurrency = ordersList.isNotEmpty && ordersList.first.currency.isNotEmpty
+    final String orderCurrency =
+        ordersList.isNotEmpty && ordersList.first.currency.isNotEmpty
         ? ordersList.first.currency
         : 'AED';
 
@@ -252,10 +310,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (topWidget != null)
-            topWidget
-          else
-            const SizedBox(height: 32),
+          if (topWidget != null) topWidget else const SizedBox(height: 32),
           const SizedBox(height: 8),
           Text(
             title,
@@ -303,10 +358,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _buildOrderCard(DashboardOrder order) {
-    final String platformText = order.platform == "False" || order.platform.isEmpty
+    final String platformText =
+        order.platform == "False" || order.platform.isEmpty
         ? 'Pending'
         : order.platform;
-        
+
     Color badgeColor = AppColors.pendingYellow;
     if (platformText.toLowerCase().contains('subscription')) {
       badgeColor = AppColors.primaryBlue;
@@ -328,8 +384,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final refText = order.invoiceReferenceNo;
 
     final double commVal = order.commissionAmountTotal;
-    final String commText = commVal == commVal.roundToDouble() 
-        ? commVal.toStringAsFixed(0) 
+    final String commText = commVal == commVal.roundToDouble()
+        ? commVal.toStringAsFixed(0)
         : commVal.toStringAsFixed(2);
 
     return GestureDetector(
@@ -378,7 +434,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: badgeColor,
                     borderRadius: BorderRadius.circular(20),
@@ -418,41 +477,44 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         color: Color(0xFF1E2B7B),
                         decoration: TextDecoration.underline,
                         fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text(
-                    'Commission Amount:',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.black87,
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text(
+                      'Commission Amount:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.black87,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    commText,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w500,
+                    const SizedBox(height: 4),
+                    Text(
+                      commText,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 
-  void _showOrderDetailsBottomSheet(BuildContext context, DashboardOrder order) {
+  void _showOrderDetailsBottomSheet(
+    BuildContext context,
+    DashboardOrder order,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -461,10 +523,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        final String platformText = order.platform == "False" || order.platform.isEmpty
+        final String platformText =
+            order.platform == "False" || order.platform.isEmpty
             ? 'Pending'
             : order.platform;
-            
+
         Color badgeColor = AppColors.pendingYellow;
         if (platformText.toLowerCase().contains('subscription')) {
           badgeColor = AppColors.primaryBlue;
@@ -484,8 +547,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         }
 
         final double commVal = order.commissionAmountTotal;
-        final String commText = commVal == commVal.roundToDouble() 
-            ? commVal.toStringAsFixed(0) 
+        final String commText = commVal == commVal.roundToDouble()
+            ? commVal.toStringAsFixed(0)
             : commVal.toStringAsFixed(2);
 
         return DraggableScrollableSheet(
@@ -497,7 +560,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             return SingleChildScrollView(
               controller: scrollController,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 16.0,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -524,7 +590,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: badgeColor,
                             borderRadius: BorderRadius.circular(20),
@@ -569,7 +638,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     _buildDetailRow(
                       icon: Icons.business,
                       label: 'Company',
-                      value: order.companyName.isNotEmpty ? order.companyName : 'N/A',
+                      value: order.companyName.isNotEmpty
+                          ? order.companyName
+                          : 'N/A',
                     ),
                     const SizedBox(height: 8),
                     _buildDetailRow(
@@ -589,44 +660,46 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ...order.invoiceDetails.map((detail) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  detail.productName,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black87,
+                    ...order.invoiceDetails.map(
+                      (detail) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    detail.productName,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.black87,
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  'Qty: ${detail.quantity} x ${order.currency} ${detail.unitPrice.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textGrey,
+                                  Text(
+                                    'Qty: ${detail.quantity} x ${order.currency} ${detail.unitPrice.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textGrey,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          Text(
-                            '${order.currency} ${detail.subtotal.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
+                            Text(
+                              '${order.currency} ${detail.subtotal.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    )),
+                    ),
                     const SizedBox(height: 24),
                     const Divider(height: 1),
                     const SizedBox(height: 20),
@@ -723,15 +796,51 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    widget.user.displayName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.user.displayName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.secondaryTeal.withValues(
+                              alpha: 0.3,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.secondaryTeal,
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            widget.user.formattedUserType.isNotEmpty
+                                ? widget.user.formattedUserType
+                                : 'Partner',
+                            style: const TextStyle(
+                              color: AppColors.secondaryTeal,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const Icon(Icons.more_horiz, color: Colors.white),
+                  const Icon(Icons.person, color: Colors.white),
                 ],
               ),
             ),
@@ -754,41 +863,51 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 'Redeem Request',
                 style: TextStyle(color: Colors.white, fontSize: 18),
               ),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context); // Close drawer
-                ref.read(navigationProvider.notifier).state = ActiveScreen.redeemDetails;
+                await Future.delayed(const Duration(milliseconds: 250));
+                ref.read(navigationProvider.notifier).state =
+                    ActiveScreen.redeemDetails;
               },
             ),
             const Spacer(),
-            Column(
-              children: [
-                const Text(
-                  'SAASORDER',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-                const Text(
-                  'partnerPro',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                ref.read(navigationProvider.notifier).state =
+                    ActiveScreen.dashboard;
+              },
+              behavior: HitTestBehavior.opaque,
+              child: Column(
+                children: [
+                  const Text(
+                    'SAASORDER',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
                   ),
-                ),
-                const SizedBox(height: 20),
-                TextButton(
-                  onPressed: () => _handleLogout(context),
-                  child: const Text(
-                    'Logout',
+                  const Text(
+                    'partnerPro',
                     style: TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 18,
+                      color: Colors.white,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-              ],
+                ],
+              ),
             ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: () => _handleLogout(context),
+              child: const Text(
+                'Logout',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -812,12 +931,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           content: const Text(
             'Are you sure you want to log out of your account?',
-            style: TextStyle(
-              color: AppColors.textGrey,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: AppColors.textGrey, fontSize: 16),
           ),
-          actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          actionsPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -838,15 +957,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 elevation: 0,
               ),
               child: const Text(
                 'Logout',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
           ],
@@ -875,8 +994,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         title,
         style: const TextStyle(color: Colors.white, fontSize: 18),
       ),
-      onTap: () {
+      onTap: () async {
         Navigator.pop(context);
+        await Future.delayed(const Duration(milliseconds: 250));
         ref.read(navigationProvider.notifier).state = screen;
       },
     );

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/dashboard_data.dart';
-import '../models/view_more_data.dart';
-import '../providers/dashboard_provider.dart';
-import '../theme/app_colors.dart';
-import '../providers/auth_provider.dart';
+import '../../models/dashboard_data.dart';
+import '../../models/view_more_data.dart';
+import '../../providers/dashboard_provider.dart';
+import '../../theme/app_colors.dart';
+import '../../providers/auth_provider.dart';
+import '../../utils/currency_utils.dart';
 
 class ViewMoreScreen extends ConsumerWidget {
   const ViewMoreScreen({super.key});
@@ -14,40 +15,10 @@ class ViewMoreScreen extends ConsumerWidget {
     String fromCurrency,
     String targetCurrency,
   ) {
-    final cleanFrom = (fromCurrency.isEmpty || fromCurrency == 'False')
-        ? 'AED'
-        : fromCurrency.toUpperCase();
-    final cleanTarget =
-        (targetCurrency == '-- Select Currency --' || targetCurrency.isEmpty)
-        ? cleanFrom
-        : targetCurrency.toUpperCase();
-
-    if (cleanFrom == cleanTarget) return amount;
-
-    // Rates relative to AED (1 AED = X currency)
-    final rates = {
-      'AED': 1.0,
-      'USD': 0.27226,
-      'INR': 22.68,
-      'OMR': 0.1049,
-      'SAR': 1.0215,
-    };
-
-    final rateFrom = rates[cleanFrom] ?? 1.0;
-    final rateTo = rates[cleanTarget] ?? 1.0;
-
-    final amountInAED = amount / rateFrom;
-    return amountInAED * rateTo;
+    return CurrencyUtils.convertAmount(amount, fromCurrency, targetCurrency);
   }
 
-  static const List<String> _currencies = [
-    '-- Select Currency --',
-    'USD',
-    'INR',
-    'OMR',
-    'AED',
-    'SAR',
-  ];
+  static const List<String> _currencies = CurrencyUtils.currencies;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -68,39 +39,51 @@ class ViewMoreScreen extends ConsumerWidget {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => ref.read(navigationProvider.notifier).state = ActiveScreen.dashboard,
+            onPressed: () => ref.read(navigationProvider.notifier).state =
+                ActiveScreen.dashboard,
           ),
-        title: const Text(
-          'Detailed Statement',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
+          title: const Text(
+            'Detailed Statement',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
           ),
         ),
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () => ref.refresh(viewMoreDataProvider.future),
-          child: (() {
-            if (viewMoreAsync.hasValue) {
-              final data = viewMoreAsync.value!;
-              return _buildContent(context, ref, data, filterState, filterNotifier);
-            } else if (viewMoreAsync.isLoading) {
-              return const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    AppColors.primaryBlue,
+        body: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: () => ref.refresh(viewMoreDataProvider.future),
+            child: (() {
+              if (viewMoreAsync.hasValue) {
+                final data = viewMoreAsync.value!;
+                return _buildContent(
+                  context,
+                  ref,
+                  data,
+                  filterState,
+                  filterNotifier,
+                );
+              } else if (viewMoreAsync.isLoading) {
+                return const Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.primaryBlue,
+                    ),
                   ),
-                ),
-              );
-            } else {
-              return _buildErrorState(context, ref, viewMoreAsync.error?.toString() ?? 'Unknown error');
-            }
-          })(),
+                );
+              } else {
+                return _buildErrorState(
+                  context,
+                  ref,
+                  viewMoreAsync.error?.toString() ?? 'Unknown error',
+                );
+              }
+            })(),
+          ),
         ),
       ),
-    ),);
+    );
   }
 
   Widget _buildCurrencyDropdown(
@@ -148,8 +131,6 @@ class ViewMoreScreen extends ConsumerWidget {
     ViewMoreFilterState filterState,
     ViewMoreFilterNotifier filterNotifier,
   ) {
-    final platforms = data.availablePlatforms.toSet().toList();
-
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -172,10 +153,10 @@ class ViewMoreScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Tap to expand or filter below.',
-                      style: TextStyle(fontSize: 13, color: AppColors.textGrey),
-                    ),
+                    // const Text(
+                    //   'Tap to expand or filter below.',
+                    //   style: TextStyle(fontSize: 13, color: AppColors.textGrey),
+                    // ),
                   ],
                 ),
               ),
@@ -184,66 +165,66 @@ class ViewMoreScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           // Filter Chips
-          if (platforms.isNotEmpty) ...[
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  ChoiceChip(
-                    label: Text(
-                      'All Platforms',
-                      style: TextStyle(
-                        color: filterState.selectedPlatform == null
-                            ? Colors.white
-                            : AppColors.primaryBlue,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    selected: filterState.selectedPlatform == null,
-                    selectedColor: AppColors.primaryBlue,
-                    backgroundColor: Colors.white,
-                    side: BorderSide(
-                      color: filterState.selectedPlatform == null
-                          ? AppColors.primaryBlue
-                          : Colors.grey.shade300,
-                    ),
-                    onSelected: (selected) {
-                      filterNotifier.setPlatform(null);
-                    },
-                  ),
-                  ...platforms.map((platform) {
-                    final isSelected = filterState.selectedPlatform == platform;
-                    return Padding(
-                      padding: const EdgeInsets.only(left: 8.0),
-                      child: ChoiceChip(
-                        label: Text(
-                          platform,
-                          style: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.primaryBlue,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        selected: isSelected,
-                        selectedColor: AppColors.primaryBlue,
-                        backgroundColor: Colors.white,
-                        side: BorderSide(
-                          color: isSelected
-                              ? AppColors.primaryBlue
-                              : Colors.grey.shade300,
-                        ),
-                        onSelected: (selected) {
-                          filterNotifier.setPlatform(selected ? platform : null);
-                        },
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
+          // if (platforms.isNotEmpty) ...[
+          //   SingleChildScrollView(
+          //     scrollDirection: Axis.horizontal,
+          //     child: Row(
+          //       children: [
+          //         ChoiceChip(
+          //           label: Text(
+          //             'All Platforms',
+          //             style: TextStyle(
+          //               color: filterState.selectedPlatform == null
+          //                   ? Colors.white
+          //                   : AppColors.primaryBlue,
+          //               fontWeight: FontWeight.bold,
+          //             ),
+          //           ),
+          //           selected: filterState.selectedPlatform == null,
+          //           selectedColor: AppColors.primaryBlue,
+          //           backgroundColor: Colors.white,
+          //           side: BorderSide(
+          //             color: filterState.selectedPlatform == null
+          //                 ? AppColors.primaryBlue
+          //                 : Colors.grey.shade300,
+          //           ),
+          //           onSelected: (selected) {
+          //             filterNotifier.setPlatform(null);
+          //           },
+          //         ),
+          //         ...platforms.map((platform) {
+          //           final isSelected = filterState.selectedPlatform == platform;
+          //           return Padding(
+          //             padding: const EdgeInsets.only(left: 8.0),
+          //             child: ChoiceChip(
+          //               label: Text(
+          //                 platform,
+          //                 style: TextStyle(
+          //                   color: isSelected
+          //                       ? Colors.white
+          //                       : AppColors.primaryBlue,
+          //                   fontWeight: FontWeight.bold,
+          //                 ),
+          //               ),
+          //               selected: isSelected,
+          //               selectedColor: AppColors.primaryBlue,
+          //               backgroundColor: Colors.white,
+          //               side: BorderSide(
+          //                 color: isSelected
+          //                     ? AppColors.primaryBlue
+          //                     : Colors.grey.shade300,
+          //               ),
+          //               onSelected: (selected) {
+          //                 filterNotifier.setPlatform(selected ? platform : null);
+          //               },
+          //             ),
+          //           );
+          //         }),
+          //       ],
+          //     ),
+          //   ),
+          //   const SizedBox(height: 16),
+          // ],
           Expanded(
             child: data.months.isEmpty
                 ? const Center(
@@ -257,13 +238,15 @@ class ViewMoreScreen extends ConsumerWidget {
                     itemBuilder: (context, index) {
                       final monthData = data.months[index];
 
-                      final filteredOrders = filterState.selectedPlatform == null
+                      final filteredOrders =
+                          filterState.selectedPlatform == null
                           ? monthData.orders
                           : monthData.orders
                                 .where(
                                   (o) =>
                                       o.platform.toLowerCase() ==
-                                      filterState.selectedPlatform!.toLowerCase(),
+                                      filterState.selectedPlatform!
+                                          .toLowerCase(),
                                 )
                                 .toList();
 
@@ -386,8 +369,8 @@ class ViewMoreScreen extends ConsumerWidget {
   ) {
     final String platformText =
         order.platform == "False" || order.platform.isEmpty
-            ? 'Pending'
-            : order.platform;
+        ? 'Pending'
+        : order.platform;
 
     Color badgeColor = AppColors.pendingYellow;
     if (platformText.toLowerCase().contains('subscription')) {
@@ -599,8 +582,8 @@ class ViewMoreScreen extends ConsumerWidget {
       builder: (context) {
         final String platformText =
             order.platform == "False" || order.platform.isEmpty
-                ? 'Pending'
-                : order.platform;
+            ? 'Pending'
+            : order.platform;
 
         Color badgeColor = AppColors.pendingYellow;
         if (platformText.toLowerCase().contains('subscription')) {

@@ -34,9 +34,17 @@ class StatementService {
       return StatementOrderResponse.fromJson(normalized);
     } on DioException catch (e) {
       String message = 'Failed to load statement data. Please try again.';
-      final responseBody = _normalizeMap(e.response?.data);
+      dynamic errorData = e.response?.data;
+      if (errorData is String) {
+        try {
+          errorData = jsonDecode(errorData);
+        } catch (_) {}
+      }
+      final responseBody = _normalizeMap(errorData);
       if (responseBody != null && responseBody.containsKey('message')) {
         message = responseBody['message'].toString();
+      } else if (e.response != null) {
+        message = 'Failed to load statement data. Server returned status code ${e.response?.statusCode}.';
       } else if (e.message != null) {
         message = e.message!;
       }

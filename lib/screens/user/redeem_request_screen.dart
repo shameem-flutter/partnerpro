@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../theme/app_colors.dart';
-import '../providers/auth_provider.dart';
-import '../providers/redemption_provider.dart';
-import '../providers/dashboard_provider.dart';
-import '../providers/statement_provider.dart';
+import '../../theme/app_colors.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/redemption_provider.dart';
+import '../../providers/dashboard_provider.dart';
+import '../../providers/statement_provider.dart';
 import 'view_more_screen.dart';
 
 class RedeemRequestScreen extends ConsumerStatefulWidget {
@@ -216,13 +216,35 @@ class _RedeemRequestScreenState extends ConsumerState<RedeemRequestScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                // Refresh data
-                final _ = ref.refresh(dashboardDataProvider);
-                final _ = ref.refresh(statementDataProvider);
-                final _ = ref.refresh(redemptionBalanceProvider);
-                Navigator.of(context).pop(); // pop dialog
-                Navigator.of(context).pop(); // pop screen
+              onPressed: () async {
+                final navigator = Navigator.of(context);
+                // Show a quick loader dialog
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primaryBlue,
+                      ),
+                    ),
+                  ),
+                );
+
+                try {
+                  // Refresh data and wait for the new data to be fetched
+                  await Future.wait([
+                    ref.refresh(dashboardDataProvider.future),
+                    ref.refresh(statementDataProvider.future),
+                    ref.refresh(redemptionBalanceProvider.future),
+                  ]);
+                } catch (_) {}
+
+                if (navigator.mounted) {
+                  navigator.pop(); // pop loader dialog
+                  navigator.pop(); // pop success dialog
+                  navigator.pop(); // pop RedeemRequestScreen
+                }
               },
               child: const Text(
                 'OK',

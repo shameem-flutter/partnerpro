@@ -7,6 +7,7 @@ class AuthUser {
     required this.lastName,
     required this.role,
     required this.phoneNumber,
+    this.userType = '',
   });
 
   final int id;
@@ -16,15 +17,24 @@ class AuthUser {
   final String lastName;
   final int role;
   final String? phoneNumber;
+  final String userType;
 
   String get displayName {
-    if (firstName.trim().isNotEmpty) {
-      return firstName.trim();
-    }
-    if (username.trim().isNotEmpty) {
-      return username.trim();
-    }
+    final full = '${firstName.trim()} ${lastName.trim()}'.trim();
+    if (full.isNotEmpty) return full;
+    if (firstName.trim().isNotEmpty) return firstName.trim();
+    if (username.trim().isNotEmpty) return username.trim();
     return email.trim();
+  }
+
+  String get formattedUserType {
+    if (userType.isEmpty) return '';
+    return userType
+        .split('_')
+        .map((word) => word.isEmpty
+            ? ''
+            : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+        .join(' ');
   }
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
@@ -36,6 +46,7 @@ class AuthUser {
       lastName: json['last_name']?.toString() ?? '',
       role: _parseInt(json['role']),
       phoneNumber: json['phone_number']?.toString(),
+      userType: json['user_type']?.toString() ?? '',
     );
   }
 
@@ -48,14 +59,12 @@ class AuthUser {
       'last_name': lastName,
       'role': role,
       'phone_number': phoneNumber,
+      'user_type': userType,
     };
   }
 
   static int _parseInt(dynamic value) {
-    if (value is int) {
-      return value;
-    }
-
+    if (value is int) return value;
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

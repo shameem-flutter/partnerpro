@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../theme/app_colors.dart';
-import '../providers/statement_provider.dart';
-import '../models/statement_order.dart';
-import '../providers/auth_provider.dart';
-import '../providers/redemption_provider.dart';
-import '../models/redemption_response.dart';
-import '../providers/dashboard_provider.dart';
+import '../../theme/app_colors.dart';
+import '../../providers/statement_provider.dart';
+import '../../models/statement_order.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/redemption_provider.dart';
+import '../../models/redemption_response.dart';
+import '../../providers/dashboard_provider.dart';
 
 class StatementScreen extends ConsumerWidget {
   const StatementScreen({super.key});
@@ -30,256 +30,271 @@ class StatementScreen extends ConsumerWidget {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => ref.read(navigationProvider.notifier).state = ActiveScreen.dashboard,
+            onPressed: () => ref.read(navigationProvider.notifier).state =
+                ActiveScreen.dashboard,
           ),
-        title: const Text(
-          'Commission Statement',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
+          title: const Text(
+            'Commission Statement',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
           ),
         ),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              _buildFilters(context, ref, filterState, filterNotifier),
-              const SizedBox(height: 16),
-              (() {
-                if (statementAsync.hasValue) {
-                  final data = statementAsync.value!;
-                  final totalBalance = data.orders.fold<double>(
-                    0.0,
-                    (sum, order) => sum + order.commissionAmountTotal,
-                  );
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppColors.primaryBlue, Color(0xFF2C3E9F)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 16),
+                _buildFilters(context, ref, filterState, filterNotifier),
+                const SizedBox(height: 16),
+                (() {
+                  if (statementAsync.hasValue) {
+                    final data = statementAsync.value!;
+                    final totalBalance = data.orders.fold<double>(
+                      0.0,
+                      (sum, order) => sum + order.commissionAmountTotal,
+                    );
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppColors.primaryBlue, Color(0xFF2C3E9F)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'TOTAL AVAILABLE BALANCE',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.8),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'TOTAL AVAILABLE BALANCE',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.8,
+                                      ),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.2,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.baseline,
-                                  textBaseline: TextBaseline.alphabetic,
-                                  children: [
-                                    const Text(
-                                      'AED ',
-                                      style: TextStyle(
-                                        color: AppColors.secondaryTeal,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.baseline,
+                                    textBaseline: TextBaseline.alphabetic,
+                                    children: [
+                                      const Text(
+                                        'AED ',
+                                        style: TextStyle(
+                                          color: AppColors.secondaryTeal,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
-                                    Text(
-                                      totalBalance.toStringAsFixed(2),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 32,
-                                        fontWeight: FontWeight.bold,
+                                      Text(
+                                        totalBalance.toStringAsFixed(2),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
                                 ),
-                              ],
-                            ),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
+                                child: const Icon(
+                                  Icons.account_balance_wallet,
+                                  color: AppColors.secondaryTeal,
+                                  size: 32,
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.account_balance_wallet,
-                                color: AppColors.secondaryTeal,
-                                size: 32,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: totalBalance > 0
-                                ? () => _showRedemptionDialog(
-                                    context,
-                                    totalBalance,
-                                  )
-                                : null,
-                            icon: const Icon(Icons.currency_exchange, size: 18),
-                            label: const Text(
-                              'Convert Balance',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.secondaryTeal,
-                              foregroundColor: AppColors.primaryBlue,
-                              disabledBackgroundColor: Colors.white24,
-                              disabledForegroundColor: Colors.white54,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 0,
-                            ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
-              })(),
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () => ref.refresh(statementDataProvider.future),
-                  child: (() {
-                    if (statementAsync.hasValue) {
-                      final data = statementAsync.value!;
-                      final filtered = _getFilteredOrders(data.orders, filterState);
-                      if (filtered.isEmpty) {
-                        return const Center(
-                          child: Text(
-                            'No transactions found for the selected range.',
-                            style: TextStyle(
-                              color: AppColors.textGrey,
-                              fontSize: 16,
-                            ),
-                          ),
-                        );
-                      }
-
-                      // Calculate running balances
-                      final runningBalances = List<double>.filled(
-                        filtered.length,
-                        0.0,
-                      );
-                      double cumulative = 0.0;
-                      for (int i = filtered.length - 1; i >= 0; i--) {
-                        cumulative += filtered[i].commissionAmountTotal;
-                        runningBalances[i] = cumulative;
-                      }
-
-                      return ListView.builder(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          final order = filtered[index];
-                          final balance = runningBalances[index];
-
-                          return _buildTransactionCard(
-                            date: _formatDateStr(order.invoiceDate),
-                            type: order.customerName.isNotEmpty
-                                ? order.customerName
-                                : 'Direct Order',
-                            ref: order.invoiceReferenceNo,
-                            currency: order.currency,
-                            amount:
-                                '+${order.commissionAmountTotal.toStringAsFixed(2)}',
-                            balance: balance.toStringAsFixed(2),
-                            isCredit: true,
-                          );
-                        },
-                      );
-                    } else if (statementAsync.isLoading) {
-                      return const Center(
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.primaryBlue,
-                          ),
-                        ),
-                      );
-                    } else {
-                      final err = statementAsync.error?.toString() ?? 'Unknown error';
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.error_outline,
-                              size: 48,
-                              color: Colors.red,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Failed to load transactions:\n$err',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.red.shade800,
-                                fontWeight: FontWeight.w500,
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: totalBalance > 0
+                                  ? () => _showRedemptionDialog(
+                                      context,
+                                      totalBalance,
+                                    )
+                                  : null,
+                              icon: const Icon(
+                                Icons.currency_exchange,
+                                size: 18,
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: () => ref.refresh(statementDataProvider),
+                              label: const Text(
+                                'Convert Balance',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryBlue,
-                                foregroundColor: Colors.white,
+                                backgroundColor: AppColors.secondaryTeal,
+                                foregroundColor: AppColors.primaryBlue,
+                                disabledBackgroundColor: Colors.white24,
+                                disabledForegroundColor: Colors.white54,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
+                                elevation: 0,
                               ),
-                              child: const Text('Retry'),
                             ),
-                          ],
-                        ),
-                      );
-                    }
-                  })(),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                })(),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () => ref.refresh(statementDataProvider.future),
+                    child: (() {
+                      if (statementAsync.hasValue) {
+                        final data = statementAsync.value!;
+                        final filtered = _getFilteredOrders(
+                          data.orders,
+                          filterState,
+                        );
+                        if (filtered.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              'No transactions found for the selected range.',
+                              style: TextStyle(
+                                color: AppColors.textGrey,
+                                fontSize: 16,
+                              ),
+                            ),
+                          );
+                        }
+
+                        // Calculate running balances
+                        final runningBalances = List<double>.filled(
+                          filtered.length,
+                          0.0,
+                        );
+                        double cumulative = 0.0;
+                        for (int i = filtered.length - 1; i >= 0; i--) {
+                          cumulative += filtered[i].commissionAmountTotal;
+                          runningBalances[i] = cumulative;
+                        }
+
+                        return ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final order = filtered[index];
+                            final balance = runningBalances[index];
+
+                            return _buildTransactionCard(
+                              date: _formatDateStr(order.invoiceDate),
+                              type: order.customerName.isNotEmpty
+                                  ? order.customerName
+                                  : 'Direct Order',
+                              ref: order.invoiceReferenceNo,
+                              currency: order.currency,
+                              amount:
+                                  '+${order.commissionAmountTotal.toStringAsFixed(2)}',
+                              balance: balance.toStringAsFixed(2),
+                              isCredit: true,
+                            );
+                          },
+                        );
+                      } else if (statementAsync.isLoading) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.primaryBlue,
+                            ),
+                          ),
+                        );
+                      } else {
+                        final err =
+                            statementAsync.error?.toString() ?? 'Unknown error';
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.error_outline,
+                                size: 48,
+                                color: Colors.red,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Failed to load transactions:\n$err',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.red.shade800,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: () =>
+                                    ref.refresh(statementDataProvider),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primaryBlue,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                    })(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),);
+    );
   }
 
   List<StatementOrder> _getFilteredOrders(
     List<StatementOrder> allOrders,
     StatementFilterState filterState,
   ) {
-    if (filterState.appliedStartDate == null && filterState.appliedEndDate == null) {
+    if (filterState.appliedStartDate == null &&
+        filterState.appliedEndDate == null) {
       return allOrders;
     }
     return allOrders.where((order) {
@@ -338,10 +353,14 @@ class StatementScreen extends ConsumerWidget {
   ) {
     final startText = filterState.startDate == null
         ? 'Start Date'
-        : _formatDateStr(filterState.startDate!.toIso8601String().split('T').first);
+        : _formatDateStr(
+            filterState.startDate!.toIso8601String().split('T').first,
+          );
     final endText = filterState.endDate == null
         ? 'End Date'
-        : _formatDateStr(filterState.endDate!.toIso8601String().split('T').first);
+        : _formatDateStr(
+            filterState.endDate!.toIso8601String().split('T').first,
+          );
 
     return Row(
       children: [
@@ -643,8 +662,7 @@ class RedemptionBottomSheet extends ConsumerStatefulWidget {
       RedemptionBottomSheetState();
 }
 
-class RedemptionBottomSheetState
-    extends ConsumerState<RedemptionBottomSheet> {
+class RedemptionBottomSheetState extends ConsumerState<RedemptionBottomSheet> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
 
@@ -670,19 +688,16 @@ class RedemptionBottomSheetState
 
     final amount = double.parse(_amountController.text.trim());
     final authState = ref.read(authNotifierProvider);
-    final token = authState.session?.accessToken ??
+    final token =
+        authState.session?.accessToken ??
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc5ODgwNDk4LCJpYXQiOjE3Nzk3OTQwOTgsImp0aSI6ImVmNTFlNTA4MjE5NzQ0OTk5MTUzMGY5OTk1MWRmYmY3IiwidXNlcl9pZCI6IjQ3In0.G6hPKWbwJjqSPL6xtjCwEPR46AS7bIPh8Z4JXAuoerY';
 
-    await ref.read(redemptionNotifierProvider.notifier).convert(
-          token: token,
-          amount: amount,
-        );
+    await ref
+        .read(redemptionNotifierProvider.notifier)
+        .convert(token: token, amount: amount);
 
-    final updatedState = ref.read(redemptionNotifierProvider);
-    if (updatedState.result != null) {
-      final _ = ref.refresh(statementDataProvider);
-      final _ = ref.refresh(dashboardDataProvider);
-    }
+    // Refreshing is now deferred until the user clicks "Close" on the success screen
+    // to prevent immediate background loading spinner flickering.
   }
 
   @override
@@ -916,7 +931,9 @@ class RedemptionBottomSheetState
   Widget _buildSuccessState(RedemptionResponse result) {
     final double convertedVal = double.tryParse(result.convertedAmount) ?? 0.0;
     final String formattedConverted = convertedVal.toStringAsFixed(2);
-    final selectedCurrency = ref.read(redemptionNotifierProvider).selectedCurrency;
+    final selectedCurrency = ref
+        .read(redemptionNotifierProvider)
+        .selectedCurrency;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -991,7 +1008,32 @@ class RedemptionBottomSheetState
         ),
         const SizedBox(height: 24),
         ElevatedButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () async {
+            final navigator = Navigator.of(context);
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryBlue,
+                  ),
+                ),
+              ),
+            );
+
+            try {
+              await Future.wait([
+                ref.refresh(statementDataProvider.future),
+                ref.refresh(dashboardDataProvider.future),
+              ]);
+            } catch (_) {}
+
+            if (navigator.mounted) {
+              navigator.pop(); // pop loader dialog
+              navigator.pop(); // pop bottom sheet
+            }
+          },
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primaryBlue,
             foregroundColor: Colors.white,

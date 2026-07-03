@@ -4,26 +4,33 @@ import 'package:flutter_riverpod/legacy.dart';
 import '../models/auth_session.dart';
 import '../services/auth_service.dart';
 import '../services/auth_storage.dart';
+import '../services/permission_service.dart';
 import 'dio_provider.dart';
 
-final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 void showGlobalSnackBar(String message, {bool isSuccess = false}) {
   rootScaffoldMessengerKey.currentState?.showSnackBar(
     SnackBar(
       content: Text(
-        message, 
+        message,
         style: const TextStyle(
           color: Colors.white,
           fontFamily: 'Roboto',
         ),
       ),
-      backgroundColor: isSuccess ? const Color(0xFF06D6A0) : const Color(0xFFE63946),
+      backgroundColor:
+          isSuccess ? const Color(0xFF06D6A0) : const Color(0xFFE63946),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
   );
 }
+
+// ---------------------------------------------------------------------------
+// Auth State
+// ---------------------------------------------------------------------------
 
 class AuthState {
   final bool isLoading;
@@ -46,6 +53,10 @@ class AuthState {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Providers
+// ---------------------------------------------------------------------------
+
 final authStorageProvider = Provider<AuthStorage>((ref) => AuthStorage());
 final authServiceProvider = Provider<AuthService>((ref) {
   final dio = ref.watch(dioProvider);
@@ -64,6 +75,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> _init() async {
     state = state.copyWith(isLoading: true);
     final session = await _authStorage.loadSession();
+    if (session != null) {
+      // Re-initialise PermissionService from the stored token
+      PermissionService.instance.initFromToken(session.accessToken);
+    }
     state = AuthState(session: session);
   }
 
@@ -85,18 +100,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     state = state.copyWith(isLoading: true);
+    PermissionService.instance.clear();
     await _authStorage.clearSession();
     state = const AuthState();
   }
 }
 
-final authNotifierProvider = StateNotifierProvider<AuthNotifier, AuthState>((
-  ref,
-) {
-  final authService = ref.watch(authServiceProvider);
-  final authStorage = ref.watch(authStorageProvider);
-  return AuthNotifier(authService, authStorage);
-});
+final authNotifierProvider =
+    StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+      final authService = ref.watch(authServiceProvider);
+      final authStorage = ref.watch(authStorageProvider);
+      return AuthNotifier(authService, authStorage);
+    });
+
+// ---------------------------------------------------------------------------
+// Navigation (Normal User)
+// ---------------------------------------------------------------------------
 
 enum ActiveScreen {
   dashboard,
@@ -105,4 +124,7 @@ enum ActiveScreen {
   redeemDetails,
 }
 
-final navigationProvider = StateProvider<ActiveScreen>((ref) => ActiveScreen.dashboard);
+final navigationProvider =
+    StateProvider<ActiveScreen>((ref) => ActiveScreen.dashboard);
+
+

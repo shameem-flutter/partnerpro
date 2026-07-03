@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../theme/app_colors.dart';
-import '../models/sales_report.dart';
-import '../providers/redemption_provider.dart';
-import '../providers/auth_provider.dart';
+import '../../theme/app_colors.dart';
+import '../../models/sales_report.dart';
+import '../../providers/redemption_provider.dart';
+import '../../providers/auth_provider.dart';
 import 'redeem_request_screen.dart';
 
 class RedeemDetailsScreen extends ConsumerWidget {
@@ -50,104 +50,106 @@ class RedeemDetailsScreen extends ConsumerWidget {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => ref.read(navigationProvider.notifier).state = ActiveScreen.dashboard,
+            onPressed: () => ref.read(navigationProvider.notifier).state =
+                ActiveScreen.dashboard,
           ),
-        title: const Text(
-          'Redeem Details',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Teal accent band below AppBar
-            Container(height: 8, color: AppColors.secondaryTeal),
-            Expanded(
-              child: (() {
-                if (salesReportState.hasValue &&
-                    redemptionBalanceState.hasValue) {
-                  final salesReport = salesReportState.value!;
-                  final redemptionBalance = redemptionBalanceState.value!;
-                  final totalCredit =
-                      double.tryParse(salesReport.totalCredit) ?? 0.0;
-                  final totalDebit =
-                      double.tryParse(salesReport.totalDebit) ?? 0.0;
-                  final availableBalance =
-                      double.tryParse(redemptionBalance.availableBalance) ??
-                      0.0;
-                  final hasPending = redemptionBalance.hasPendingRedemption;
-                  final reportItems = salesReport.salesReport;
-
-                  return LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isMobile = constraints.maxWidth < 750;
-
-                      return SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: isMobile
-                                  ? _buildMobileUnifiedCard(
-                                      context,
-                                      totalDebit,
-                                      totalCredit,
-                                      availableBalance,
-                                      hasPending,
-                                    )
-                                  : _buildDesktopMetrics(
-                                      context,
-                                      totalDebit,
-                                      totalCredit,
-                                      availableBalance,
-                                      hasPending,
-                                    ),
-                            ),
-
-                            // Using the exact table format for ALL screen sizes
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0,
-                              ),
-                              child: reportItems.isEmpty
-                                  ? _buildEmptyState()
-                                  : _buildTransactionTable(reportItems),
-                            ),
-
-                            const SizedBox(height: 40),
-                            _buildFooter(),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                } else if (salesReportState.isLoading ||
-                    redemptionBalanceState.isLoading) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        AppColors.primaryBlue,
-                      ),
-                    ),
-                  );
-                } else {
-                  final error =
-                      salesReportState.error ??
-                      redemptionBalanceState.error ??
-                      'Unknown error';
-                  return _buildErrorState(error, ref);
-                }
-              })(),
+          title: const Text(
+            'Redeem Details',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
             ),
-          ],
+          ),
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Teal accent band below AppBar
+              Container(height: 8, color: AppColors.secondaryTeal),
+              Expanded(
+                child: (() {
+                  if (salesReportState.hasValue &&
+                      redemptionBalanceState.hasValue) {
+                    final salesReport = salesReportState.value!;
+                    final redemptionBalance = redemptionBalanceState.value!;
+                    final totalCredit =
+                        double.tryParse(salesReport.totalCredit) ?? 0.0;
+                    final totalDebit =
+                        double.tryParse(salesReport.totalDebit) ?? 0.0;
+                    final availableBalance =
+                        double.tryParse(redemptionBalance.availableBalance) ??
+                        0.0;
+                    final hasPending = redemptionBalance.hasPendingRedemption;
+                    final reportItems = salesReport.salesReport;
+
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isMobile = constraints.maxWidth < 750;
+
+                        return SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: isMobile
+                                    ? _buildMobileUnifiedCard(
+                                        context,
+                                        totalDebit,
+                                        totalCredit,
+                                        availableBalance,
+                                        hasPending,
+                                      )
+                                    : _buildDesktopMetrics(
+                                        context,
+                                        totalDebit,
+                                        totalCredit,
+                                        availableBalance,
+                                        hasPending,
+                                      ),
+                              ),
+
+                              // Using the exact table format for ALL screen sizes
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0,
+                                ),
+                                child: reportItems.isEmpty
+                                    ? _buildEmptyState()
+                                    : _buildTransactionTable(reportItems),
+                              ),
+
+                              const SizedBox(height: 40),
+                              _buildFooter(),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  } else if (salesReportState.isLoading ||
+                      redemptionBalanceState.isLoading) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppColors.primaryBlue,
+                        ),
+                      ),
+                    );
+                  } else {
+                    final error =
+                        salesReportState.error ??
+                        redemptionBalanceState.error ??
+                        'Unknown error';
+                    return _buildErrorState(error, ref);
+                  }
+                })(),
+              ),
+            ],
+          ),
         ),
       ),
-    ),);
+    );
   }
 
   // --- Layout Builders ---
@@ -235,8 +237,12 @@ class RedeemDetailsScreen extends ConsumerWidget {
                       } else {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) => const RedeemRequestScreen(),
+                          PageRouteBuilder(
+                            pageBuilder:
+                                (context, animation, secondaryAnimation) =>
+                                    const RedeemRequestScreen(),
+                            transitionDuration: Duration.zero,
+                            reverseTransitionDuration: Duration.zero,
                           ),
                         );
                       }
@@ -514,8 +520,12 @@ class RedeemDetailsScreen extends ConsumerWidget {
                     } else {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (context) => const RedeemRequestScreen(),
+                        PageRouteBuilder(
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const RedeemRequestScreen(),
+                          transitionDuration: Duration.zero,
+                          reverseTransitionDuration: Duration.zero,
                         ),
                       );
                     }

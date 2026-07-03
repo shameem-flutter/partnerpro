@@ -66,13 +66,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     FocusScope.of(context).unfocus();
 
-    final success = await ref.read(authNotifierProvider.notifier).login(
+    final authNotifier = ref.read(authNotifierProvider.notifier);
+    final navNotifier = ref.read(navigationProvider.notifier);
+
+    final success = await authNotifier.login(
       _emailController.text.trim(),
       _passwordController.text,
     );
 
     if (success) {
-      ref.read(navigationProvider.notifier).state = ActiveScreen.dashboard;
+      navNotifier.state = ActiveScreen.dashboard;
       showGlobalSnackBar('Login successful', isSuccess: true);
     } else {
       if (!mounted) return;
@@ -95,7 +98,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isLoading = ref.watch(authNotifierProvider).isLoading;
+    final authState = ref.watch(authNotifierProvider);
+    final isLoading = authState.isLoading;
 
     return Scaffold(
       backgroundColor: Colors.white, // Clean white background
@@ -167,7 +171,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             color: Colors.grey.shade600,
                           ),
                         ),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 32),
+
+                        if (authState.errorMessage != null) ...[
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red.shade100),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.error_outline, color: Colors.red.shade600),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    authState.errorMessage!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade800,
+                                      fontSize: 13,
+                                      fontFamily: 'Roboto',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
 
                         // 3. Flat Minimal Form
                         Form(
@@ -315,12 +347,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   ),
                                   recognizer: TapGestureRecognizer()
                                     ..onTap = () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => const SignUpScreen(),
-                                        ),
-                                      );
+                                       Navigator.push(
+                                         context,
+                                         PageRouteBuilder(
+                                           pageBuilder: (context, animation, secondaryAnimation) => const SignUpScreen(),
+                                           transitionDuration: Duration.zero,
+                                           reverseTransitionDuration: Duration.zero,
+                                         ),
+                                       );
                                     },
                                 ),
                               ],

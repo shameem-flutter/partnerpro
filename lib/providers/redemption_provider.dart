@@ -12,7 +12,7 @@ final redemptionServiceProvider = Provider<RedemptionService>((ref) {
   return RedemptionService(dio: dio);
 });
 
-final redemptionBalanceProvider = FutureProvider.autoDispose<RedemptionBalanceResponse>((ref) async {
+final redemptionBalanceProvider = FutureProvider<RedemptionBalanceResponse>((ref) async {
   final authState = ref.watch(authNotifierProvider);
   final token = authState.session?.accessToken ?? 
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgwNTY4MzQ3LCJpYXQiOjE3ODA0ODE5NDcsImp0aSI6ImQ4MjFhMDYyNTUxYzRhMjBiNTY3MGY1ZDc1ZjgwYTE0IiwidXNlcl9pZCI6IjMwIn0.dK4Vcnm_8lxpwd3Xv6mU5Fm7tMx2iEJtfXE4AXUPqs4';
@@ -21,7 +21,7 @@ final redemptionBalanceProvider = FutureProvider.autoDispose<RedemptionBalanceRe
   return service.getBalance(accessToken: token);
 });
 
-final salesReportDataProvider = FutureProvider.autoDispose<SalesReportResponse>((ref) async {
+final salesReportDataProvider = FutureProvider<SalesReportResponse>((ref) async {
   final authState = ref.watch(authNotifierProvider);
   final token = authState.session?.accessToken ?? 
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgwNTY4MzQ3LCJpYXQiOjE3ODA0ODE5NDcsImp0aSI6ImQ4MjFhMDYyNTUxYzRhMjBiNTY3MGY1ZDc1ZjgwYTE0IiwidXNlcl9pZCI6IjMwIn0.dK4Vcnm_8lxpwd3Xv6mU5Fm7tMx2iEJtfXE4AXUPqs4';
