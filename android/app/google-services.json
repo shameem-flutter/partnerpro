@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1069041566547",
+    "project_id": "partnerpro-58964",
+    "storage_bucket": "partnerpro-58964.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1069041566547:android:50900974d5287b1f2417a6",
+        "android_client_info": {
+          "package_name": "PartnerPro.com.example"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBbIQ1vU4gP6TVewnBLZBARt609Ut-zxHE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

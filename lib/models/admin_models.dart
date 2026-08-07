@@ -338,6 +338,7 @@ class AdminReferralDetail {
 
 class SalesReportEntry {
   const SalesReportEntry({
+    required this.id,
     required this.invoiceDate,
     required this.invoiceReferenceNo,
     required this.customerName,
@@ -350,6 +351,7 @@ class SalesReportEntry {
     required this.balance,
   });
 
+  final int id;
   final String invoiceDate;
   final String invoiceReferenceNo;
   final String customerName;
@@ -365,8 +367,9 @@ class SalesReportEntry {
     final creditVal = _parseDouble(json['credit'] ?? json['commission_amount']);
     final isApp = json['is_approved'] as bool? ??
         json['is_approve'] as bool? ??
-        (creditVal > 0);
+        false;
     return SalesReportEntry(
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
       invoiceDate: json['invoice_date']?.toString() ?? '',
       invoiceReferenceNo: json['invoice_reference_no']?.toString() ?? '',
       customerName: json['customer_name']?.toString() ?? '',

@@ -289,8 +289,16 @@ class _RedeemRequestScreenState extends ConsumerState<RedeemRequestScreen> {
         ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+        child: RefreshIndicator(
+          onRefresh: () async {
+            await Future.wait([
+              ref.refresh(redemptionBalanceProvider.future),
+              ref.refresh(dashboardDataProvider.future),
+            ]);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16.0),
           child: Form(
             key: _formKey,
             child: Card(
@@ -494,7 +502,8 @@ class _RedeemRequestScreenState extends ConsumerState<RedeemRequestScreen> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildFormRow({required String label, required Widget child}) {

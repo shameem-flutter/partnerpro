@@ -77,11 +77,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (success) {
       navNotifier.state = ActiveScreen.dashboard;
       showGlobalSnackBar('Login successful', isSuccess: true);
-    } else {
-      if (!mounted) return;
-      final error = ref.read(authNotifierProvider).errorMessage ?? 'Login failed';
-      _showSnackBar(error);
     }
+    // Note: Failed login errors are handled reactively by the UI via authState.errorMessage
   }
 
   void _showSnackBar(String message, {Color? backgroundColor}) {

@@ -11,19 +11,19 @@ final dashboardServiceProvider = Provider<DashboardService>((ref) {
   return DashboardService(dio: dio);
 });
 
-final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
+final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) async {
   final authState = ref.watch(authNotifierProvider);
-  final token = authState.session?.accessToken ?? 
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc5Nzg3OTA4LCJpYXQiOjE3Nzk3MDE1MDgsImp0aSI6IjQwMzU3MmIzMzVmYTQyNTNiOTkyN2JkYjY4MWQ3YjY3IiwidXNlcl9pZCI6IjQ3In0.i6rZZ-VOL0Gwo1rgz0NqtA5CdcBbHZ0xyYUWLuhB_o0';
+  final token = authState.session?.accessToken ?? '';
+  if (token.isEmpty) throw Exception('No auth token found');
 
   final service = ref.watch(dashboardServiceProvider);
   return service.fetchHomeData(token);
 });
 
-final viewMoreDataProvider = FutureProvider<ViewMoreResponse>((ref) async {
+final viewMoreDataProvider = FutureProvider.autoDispose<ViewMoreResponse>((ref) async {
   final authState = ref.watch(authNotifierProvider);
-  final token = authState.session?.accessToken ?? 
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc5Nzg3OTA4LCJpYXQiOjE3Nzk3MDE1MDgsImp0aSI6IjQwMzU3MmIzMzVmYTQyNTNiOTkyN2JkYjY4MWQ3YjY3IiwidXNlcl9pZCI6IjQ3In0.i6rZZ-VOL0Gwo1rgz0NqtA5CdcBbHZ0xyYUWLuhB_o0';
+  final token = authState.session?.accessToken ?? '';
+  if (token.isEmpty) throw Exception('No auth token found');
 
   final service = ref.watch(dashboardServiceProvider);
   return service.fetchViewMoreData(token);

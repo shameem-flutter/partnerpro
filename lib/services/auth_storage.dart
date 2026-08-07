@@ -59,17 +59,14 @@ class AuthStorage {
       }
 
       final userModel = AuthUser.fromJson(decodedUser);
-      var role = permissions.isNotEmpty ? UserRole.admin : UserRole.normal;
-      if (userModel.userType == 'end_user') {
-        role = UserRole.normal;
-      }
+      final appUserType = AppUserTypeMapper.fromString(userModel.userType);
 
       return AuthSession(
         accessToken: accessToken,
         refreshToken: refreshToken,
         user: userModel,
         permissions: permissions,
-        role: role,
+        userType: appUserType,
       );
     } catch (e) {
       // In case of decryption errors (bad decrypt/bad padding due to Android keystore changes),

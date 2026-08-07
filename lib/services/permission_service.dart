@@ -11,8 +11,6 @@ class PermissionService {
   static final PermissionService instance = PermissionService._();
 
   List<String> _permissions = [];
-  bool _isAdmin = false;
-  String _userType = '';
 
   // ---------------------------------------------------------------------------
   // Initialisation
@@ -33,34 +31,24 @@ class PermissionService {
 
       if (perms is List && perms.isNotEmpty) {
         _permissions = perms.map((e) => e.toString()).toList();
-        _isAdmin = true;
         debugPrint(
-          '🔑 [PermissionService] ✅ ${_permissions.length} permission(s) → role = ADMIN',
+          '🔑 [PermissionService] ✅ ${_permissions.length} permission(s)',
         );
       } else {
         _permissions = [];
-        _isAdmin = false;
         debugPrint(
-          '🔑 [PermissionService] ⚠️  no permissions → role = NORMAL USER',
+          '🔑 [PermissionService] ⚠️  no permissions',
         );
       }
-
-      _userType = payload['user']?['user_type']?.toString() ?? '';
-      debugPrint('🔑 [PermissionService] userType = $_userType');
     } catch (e, stack) {
       debugPrint('🔑 [PermissionService] ❌ initFromToken ERROR: $e');
       debugPrint('🔑 [PermissionService] Stack: $stack');
       _permissions = [];
-      _isAdmin = false;
-      _userType = '';
     }
   }
 
-  /// Clear all stored permissions (e.g. on logout).
   void clear() {
     _permissions = [];
-    _isAdmin = false;
-    _userType = '';
     debugPrint('🔑 [PermissionService] cleared – user logged out');
   }
 
@@ -69,8 +57,6 @@ class PermissionService {
   // ---------------------------------------------------------------------------
 
   List<String> get permissions => List.unmodifiable(_permissions);
-  bool get isAdmin => _isAdmin;
-  String get userType => _userType;
 
   // ---------------------------------------------------------------------------
   // Permission checks

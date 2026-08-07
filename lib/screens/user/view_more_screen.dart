@@ -65,10 +65,16 @@ class ViewMoreScreen extends ConsumerWidget {
                   filterNotifier,
                 );
               } else if (viewMoreAsync.isLoading) {
-                return const Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      AppColors.primaryBlue,
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.7,
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppColors.primaryBlue,
+                        ),
+                      ),
                     ),
                   ),
                 );
@@ -227,13 +233,23 @@ class ViewMoreScreen extends ConsumerWidget {
           // ],
           Expanded(
             child: data.months.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No orders found.',
-                      style: TextStyle(color: AppColors.textGrey, fontSize: 16),
+                ? SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.5,
+                      child: const Center(
+                        child: Text(
+                          'No orders found.',
+                          style: TextStyle(
+                            color: AppColors.textGrey,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
                     ),
                   )
                 : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: data.months.length,
                     itemBuilder: (context, index) {
                       final monthData = data.months[index];
@@ -367,19 +383,12 @@ class ViewMoreScreen extends ConsumerWidget {
     DashboardOrder order,
     String selectedCurrency,
   ) {
-    final String platformText =
-        order.platform == "False" || order.platform.isEmpty
-        ? 'Pending'
-        : order.platform;
+    final authState = ref.watch(authNotifierProvider);
+    final isReferralSalesperson =
+        authState.session?.user.userType == 'referral_salesperson';
 
-    Color badgeColor = AppColors.pendingYellow;
-    if (platformText.toLowerCase().contains('subscription')) {
-      badgeColor = AppColors.primaryBlue;
-    } else if (platformText.toLowerCase().contains('project')) {
-      badgeColor = AppColors.secondaryTeal;
-    } else if (platformText.toLowerCase() == 'approved') {
-      badgeColor = AppColors.approvedGreen;
-    }
+    final String statusText = order.isApproved ? 'Approved' : 'Pending';
+    final Color badgeColor = order.isApproved ? AppColors.approvedGreen : AppColors.pendingYellow;
 
     String formattedDate = order.invoiceDate;
     final parsedDate = DateTime.tryParse(order.invoiceDate);
@@ -413,62 +422,16 @@ class ViewMoreScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Inv Date:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      formattedDate,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.black54,
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: badgeColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    platformText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
+            if (isReferralSalesperson) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Reference no:',
+                        'Total Amount:',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -477,89 +440,188 @@ class ViewMoreScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        refText,
+                        '${selectedCurrency == "-- Select Currency --" ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency) : selectedCurrency} ${order.isApproved ? convertAmount(order.totalSubtotal > 0 ? order.totalSubtotal : order.commissionAmountTotal, order.currency.isEmpty || order.currency == "False" ? "AED" : order.currency, selectedCurrency).toStringAsFixed(2) : "0.00"}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: badgeColor,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      statusText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Inv Date:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        formattedDate,
                         style: const TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF1E2B7B),
-                          decoration: TextDecoration.underline,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: badgeColor,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      statusText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Reference no:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          refText,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF1E2B7B),
+                            decoration: TextDecoration.underline,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text(
+                        'Total Amount:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${selectedCurrency == "-- Select Currency --" ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency) : selectedCurrency} ${order.isApproved ? convertAmount(order.totalSubtotal > 0 ? order.totalSubtotal : order.commissionAmountTotal, order.currency.isEmpty || order.currency == "False" ? "AED" : order.currency, selectedCurrency).toStringAsFixed(2) : "0.00"}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Text(
-                      'Total Amount:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Colors.black87,
+                ],
+              ),
+            ],
+            if (order.customerName.isNotEmpty || order.salespersonName.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (order.customerName.isNotEmpty)
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.person,
+                            size: 14,
+                            color: AppColors.textGrey,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              order.customerName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textGrey,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${selectedCurrency == "-- Select Currency --" ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency) : selectedCurrency} ${order.isApproved ? convertAmount(order.totalSubtotal, order.currency, selectedCurrency).toStringAsFixed(2) : "0.00"}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.person,
-                        size: 14,
-                        color: AppColors.textGrey,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          order.customerName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                  if (order.salespersonName.isNotEmpty)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.badge,
+                          size: 14,
+                          color: AppColors.textGrey,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          order.salespersonName,
                           style: const TextStyle(
                             fontSize: 13,
                             color: AppColors.textGrey,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.badge,
-                      size: 14,
-                      color: AppColors.textGrey,
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      order.salespersonName,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textGrey,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -580,19 +642,12 @@ class ViewMoreScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        final String platformText =
-            order.platform == "False" || order.platform.isEmpty
-            ? 'Pending'
-            : order.platform;
+        final authState = ref.read(authNotifierProvider);
+        final isReferralSalesperson =
+            authState.session?.user.userType == 'referral_salesperson';
 
-        Color badgeColor = AppColors.pendingYellow;
-        if (platformText.toLowerCase().contains('subscription')) {
-          badgeColor = AppColors.primaryBlue;
-        } else if (platformText.toLowerCase().contains('project')) {
-          badgeColor = AppColors.secondaryTeal;
-        } else if (platformText.toLowerCase() == 'approved') {
-          badgeColor = AppColors.approvedGreen;
-        }
+        final String statusText = order.isApproved ? 'Approved' : 'Pending';
+        final Color badgeColor = order.isApproved ? AppColors.approvedGreen : AppColors.pendingYellow;
 
         String formattedDate = order.invoiceDate;
         final parsedDate = DateTime.tryParse(order.invoiceDate);
@@ -651,7 +706,7 @@ class ViewMoreScreen extends ConsumerWidget {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            platformText,
+                            statusText,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -661,121 +716,146 @@ class ViewMoreScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Invoice Date: $formattedDate',
-                      style: const TextStyle(
-                        color: AppColors.textGrey,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(height: 1),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Participants',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildDetailRow(
-                      icon: Icons.person,
-                      label: 'Customer',
-                      value: order.customerName,
-                    ),
-                    const SizedBox(height: 8),
-                    _buildDetailRow(
-                      icon: Icons.business,
-                      label: 'Company',
-                      value: order.companyName.isNotEmpty
-                          ? order.companyName
-                          : 'N/A',
-                    ),
-                    const SizedBox(height: 8),
-                    _buildDetailRow(
-                      icon: Icons.badge,
-                      label: 'Salesperson',
-                      value: order.salespersonName,
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(height: 1),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Order Items',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ...order.invoiceDetails.map(
-                      (detail) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    detail.productName,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Qty: ${detail.quantity} x ${selectedCurrency == "-- Select Currency --" ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency) : selectedCurrency} ${order.isApproved ? convertAmount(detail.unitPrice, order.currency, selectedCurrency).toStringAsFixed(2) : "0.00"}',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textGrey,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Text(
-                              '${selectedCurrency == "-- Select Currency --" ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency) : selectedCurrency} ${order.isApproved ? convertAmount(detail.subtotal, order.currency, selectedCurrency).toStringAsFixed(2) : "0.00"}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ],
+                    if (!isReferralSalesperson) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Invoice Date: $formattedDate',
+                        style: const TextStyle(
+                          color: AppColors.textGrey,
+                          fontSize: 14,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(height: 1),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Total Amount:',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black54,
-                          ),
+                    ],
+                    if (order.customerName.isNotEmpty ||
+                        order.companyName.isNotEmpty ||
+                        order.salespersonName.isNotEmpty ||
+                        (order.platform.isNotEmpty &&
+                            order.platform != "False")) ...[
+                      const SizedBox(height: 24),
+                      const Divider(height: 1),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Participants',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
-                        Text(
-                          '${selectedCurrency == "-- Select Currency --" ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency) : selectedCurrency} ${order.isApproved ? convertAmount(order.totalSubtotal, order.currency, selectedCurrency).toStringAsFixed(2) : "0.00"}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (order.customerName.isNotEmpty) ...[
+                        _buildDetailRow(
+                          icon: Icons.person,
+                          label: 'Customer',
+                          value: order.customerName,
                         ),
+                        const SizedBox(height: 8),
                       ],
-                    ),
+                      if (order.companyName.isNotEmpty) ...[
+                        _buildDetailRow(
+                          icon: Icons.business,
+                          label: 'Company',
+                          value: order.companyName,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      if (order.salespersonName.isNotEmpty) ...[
+                        _buildDetailRow(
+                          icon: Icons.badge,
+                          label: 'Salesperson',
+                          value: order.salespersonName,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      if (order.platform.isNotEmpty && order.platform != "False")
+                        _buildDetailRow(
+                          icon: Icons.computer,
+                          label: 'Platform',
+                          value: order.platform,
+                        ),
+                    ],
+                    if (order.invoiceDetails.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      const Divider(height: 1),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Order Items',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ...order.invoiceDetails.map(
+                        (detail) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      detail.productName,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Qty: ${detail.quantity} x ${selectedCurrency == "-- Select Currency --" ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency) : selectedCurrency} ${order.isApproved ? convertAmount(detail.unitPrice, order.currency, selectedCurrency).toStringAsFixed(2) : "0.00"}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textGrey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                '${selectedCurrency == "-- Select Currency --" ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency) : selectedCurrency} ${order.isApproved ? convertAmount(detail.subtotal, order.currency, selectedCurrency).toStringAsFixed(2) : "0.00"}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (order.totalSubtotal > 0 || order.commissionAmountTotal > 0) ...[
+                      const SizedBox(height: 24),
+                      const Divider(height: 1),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            order.totalSubtotal > 0
+                                ? 'Total Amount:'
+                                : 'Commission Amount:',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black54,
+                            ),
+                          ),
+                          Text(
+                            '${selectedCurrency == "-- Select Currency --" ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency) : selectedCurrency} ${order.isApproved ? convertAmount(order.totalSubtotal > 0 ? order.totalSubtotal : order.commissionAmountTotal, order.currency, selectedCurrency).toStringAsFixed(2) : "0.00"}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -816,38 +896,44 @@ class ViewMoreScreen extends ConsumerWidget {
   }
 
   Widget _buildErrorState(BuildContext context, WidgetRef ref, String error) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 60, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(
-              'Error loading statement details',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.red.shade800,
-              ),
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading statement details',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textGrey),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => ref.refresh(viewMoreDataProvider),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryBlue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textGrey),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => ref.refresh(viewMoreDataProvider),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryBlue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Retry'),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -23,41 +23,50 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: _buildAppBar(context, ref),
-      body: Stack(
-        children: [
-          if (ordersAsync.hasValue)
-            _buildBody(
-              context,
-              ref,
-              ordersAsync.value!,
-              selectedId,
-              selectedCurrency,
-            )
-          else if (ordersAsync.isLoading)
-            const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppColors.primaryBlue,
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(allSalespersonOrdersProvider.future),
+        child: Stack(
+          children: [
+            if (ordersAsync.hasValue)
+              _buildBody(
+                context,
+                ref,
+                ordersAsync.value!,
+                selectedId,
+                selectedCurrency,
+              )
+            else if (ordersAsync.isLoading)
+              SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.7,
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primaryBlue,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            )
-          else
-            _buildError(context, ref, ordersAsync.error!),
+              )
+            else
+              _buildError(context, ref, ordersAsync.error!),
 
-          if (ordersAsync.hasValue && ordersAsync.isLoading)
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: LinearProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppColors.primaryBlue,
+            if (ordersAsync.hasValue && ordersAsync.isLoading)
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryBlue,
+                  ),
+                  backgroundColor: Colors.transparent,
+                  minHeight: 3,
                 ),
-                backgroundColor: Colors.transparent,
-                minHeight: 3,
               ),
-            ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: Consumer(
         builder: (context, ref, child) {
@@ -472,6 +481,51 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
     AdminMonthOrders monthData,
     String selectedCurrency,
   ) {
+    final selectedMap = ref.watch(selectedInvoicesProvider);
+    double dynamicMonthTotal = 0.0;
+
+    for (final order in monthData.orders) {
+      final hasPendingInvoices = order.invoiceDetails.any(
+        (d) => d.id != null && !d.isApproved,
+      );
+
+      double orderCommission = 0.0;
+      if (!hasPendingInvoices) {
+        orderCommission = CurrencyUtils.convertAmount(
+          order.commissionAmountTotal,
+          order.currency,
+          "AED",
+        );
+      } else {
+        for (final detail in order.invoiceDetails) {
+          final int? invoiceId = detail.id;
+          final bool isSelectable = invoiceId != null && !detail.isApproved;
+          final bool isSelected =
+              isSelectable && selectedMap.containsKey(invoiceId);
+
+          final double currentPercentage = isSelected
+              ? selectedMap[invoiceId]!
+              : (detail.commissionPercentage ?? 5.0);
+
+          final double convertedSubtotal = CurrencyUtils.convertAmount(
+            detail.subtotal,
+            order.currency,
+            "AED",
+          );
+          orderCommission += convertedSubtotal * (currentPercentage / 100);
+        }
+
+        if (orderCommission == 0.0 && order.commissionAmountTotal > 0) {
+          orderCommission = CurrencyUtils.convertAmount(
+            order.commissionAmountTotal,
+            order.currency,
+            "AED",
+          );
+        }
+      }
+      dynamicMonthTotal += orderCommission;
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -515,7 +569,7 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    'Comm. Total: ${selectedCurrency == "-- Select Currency --" ? "AED" : selectedCurrency} ${CurrencyUtils.convertAmount(monthData.totalAmount, "AED", selectedCurrency).toStringAsFixed(2)}',
+                    'Comm. Total: ${selectedCurrency == "-- Select Currency --" ? "AED" : selectedCurrency} ${CurrencyUtils.convertAmount(dynamicMonthTotal, "AED", selectedCurrency).toStringAsFixed(2)}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.approvedGreen,
@@ -562,19 +616,8 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
     DashboardOrder order,
     String selectedCurrency,
   ) {
-    final String platformText =
-        order.platform == "False" || order.platform.isEmpty
-        ? 'Pending'
-        : order.platform;
-
-    Color badgeColor = AppColors.pendingYellow;
-    if (platformText.toLowerCase().contains('subscription')) {
-      badgeColor = AppColors.primaryBlue;
-    } else if (platformText.toLowerCase().contains('project')) {
-      badgeColor = AppColors.secondaryTeal;
-    } else if (platformText.toLowerCase() == 'approved') {
-      badgeColor = AppColors.approvedGreen;
-    }
+    final String statusText = order.isApproved ? 'Approved' : 'Pending';
+    final Color badgeColor = order.isApproved ? AppColors.approvedGreen : AppColors.pendingYellow;
 
     String formattedDate = order.invoiceDate;
     final parsedDate = DateTime.tryParse(order.invoiceDate);
@@ -681,7 +724,7 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    platformText,
+                    statusText,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
@@ -795,6 +838,24 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(
+                  Icons.computer,
+                  size: 14,
+                  color: AppColors.textGrey,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Platform: ${order.platform == "False" || order.platform.isEmpty ? 'N/A' : order.platform}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textGrey,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -815,19 +876,8 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (bottomSheetContext) {
-        final String platformText =
-            order.platform == "False" || order.platform.isEmpty
-            ? 'Pending'
-            : order.platform;
-
-        Color badgeColor = AppColors.pendingYellow;
-        if (platformText.toLowerCase().contains('subscription')) {
-          badgeColor = AppColors.primaryBlue;
-        } else if (platformText.toLowerCase().contains('project')) {
-          badgeColor = AppColors.secondaryTeal;
-        } else if (platformText.toLowerCase() == 'approved') {
-          badgeColor = AppColors.approvedGreen;
-        }
+        final String statusText = order.isApproved ? 'Approved' : 'Pending';
+        final Color badgeColor = order.isApproved ? AppColors.approvedGreen : AppColors.pendingYellow;
 
         String formattedDate = order.invoiceDate;
         final parsedDate = DateTime.tryParse(order.invoiceDate);
@@ -915,7 +965,7 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                platformText,
+                                statusText,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 12,
@@ -964,6 +1014,12 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
                           label: 'Salesperson',
                           value: order.salespersonName,
                         ),
+                        const SizedBox(height: 8),
+                        _buildDetailRow(
+                          icon: Icons.computer,
+                          label: 'Platform',
+                          value: order.platform.isEmpty || order.platform == "False" ? 'N/A' : order.platform,
+                        ),
                         const SizedBox(height: 24),
                         const Divider(height: 1),
                         const SizedBox(height: 20),
@@ -989,7 +1045,7 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
                               ? selectedMap[invoiceId]!
                               : (detail.commissionPercentage ?? 5.0);
 
-                           void toggleSelection() {
+                          void toggleSelection() {
                             if (!isSelectable) return;
                             final newMap = Map<int, double>.from(
                               sheetRef.read(selectedInvoicesProvider),
@@ -1000,7 +1056,9 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
                               newMap[invoiceId] =
                                   detail.commissionPercentage ?? 5.0;
                             }
-                            sheetRef.read(selectedInvoicesProvider.notifier).state =
+                            sheetRef
+                                    .read(selectedInvoicesProvider.notifier)
+                                    .state =
                                 newMap;
                           }
 
@@ -1010,7 +1068,9 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
                               sheetRef.read(selectedInvoicesProvider),
                             );
                             newMap[invoiceId] = val;
-                            sheetRef.read(selectedInvoicesProvider.notifier).state =
+                            sheetRef
+                                    .read(selectedInvoicesProvider.notifier)
+                                    .state =
                                 newMap;
                           }
 
@@ -1268,26 +1328,65 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Commission Earned:',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.approvedGreen,
-                              ),
-                            ),
-                            Text(
-                              '$curText $commText',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.approvedGreen,
-                              ),
-                            ),
-                          ],
+                        Builder(
+                          builder: (context) {
+                            double dynamicCommission = 0.0;
+                            for (final detail in order.invoiceDetails) {
+                              final int? invoiceId = detail.id;
+                              final bool isSelectable =
+                                  invoiceId != null && !detail.isApproved;
+                              final bool isSelected =
+                                  isSelectable &&
+                                  selectedMap.containsKey(invoiceId);
+
+                              final double currentPercentage = isSelected
+                                  ? selectedMap[invoiceId]!
+                                  : (detail.commissionPercentage ?? 5.0);
+
+                              final double convertedSubtotal =
+                                  CurrencyUtils.convertAmount(
+                                    detail.subtotal,
+                                    order.currency,
+                                    selectedCurrency,
+                                  );
+                              dynamicCommission +=
+                                  convertedSubtotal * (currentPercentage / 100);
+                            }
+
+                            // If dynamic calculation results in 0 (e.g. if the backend doesn't provide
+                            // invoice-level percentages for approved orders), fallback to the total from backend
+                            if (dynamicCommission == 0.0 && order.commissionAmountTotal > 0) {
+                              dynamicCommission = CurrencyUtils.convertAmount(
+                                order.commissionAmountTotal,
+                                order.currency,
+                                selectedCurrency,
+                              );
+                            }
+
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Commission Earned:',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.approvedGreen,
+                                  ),
+                                ),
+                                Text(
+                                  hasPendingInvoices
+                                      ? '$curText ${dynamicCommission.toStringAsFixed(2)}'
+                                      : '${selectedCurrency == "-- Select Currency --" ? "AED" : selectedCurrency} ${CurrencyUtils.convertAmount(order.commissionAmountTotal, "AED", selectedCurrency).toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.approvedGreen,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 20),
                         if (hasPendingInvoices) ...[
@@ -1427,12 +1526,12 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
                 '    - Subtotal: ${matchedDetail.subtotal} ${matchedOrder.currency}\n'
                 '    - Original Comm %: ${matchedDetail.commissionPercentage ?? "N/A"}%\n'
                 '    - Approving Comm %: $targetCommPct%\n'
-                '    - Calculated Comm Amount: ${(matchedDetail.subtotal * targetCommPct / 100).toStringAsFixed(2)} ${matchedOrder.currency}'
+                '    - Calculated Comm Amount: ${(matchedDetail.subtotal * targetCommPct / 100).toStringAsFixed(2)} ${matchedOrder.currency}',
               );
             } else {
               detailsLog.add(
                 '  - Invoice ID: $id\n'
-                '    - Approving Comm %: $targetCommPct% (Details not found in cached orders)'
+                '    - Approving Comm %: $targetCommPct% (Details not found in cached orders)',
               );
             }
           }
@@ -1441,24 +1540,38 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
         debugPrint('Error compiling detailed approval log: $e');
       }
 
-      final adminUrl = await ApiConfig.getAdminFullUrl('/api/v1/dashboard/submit-selected-invoices/');
+      final adminUrl = await ApiConfig.getAdminFullUrl(
+        '/api/v1/dashboard/submit-selected-invoices/',
+      );
 
-      debugPrint('══════════════════════════════════════════════════════════════════════');
+      debugPrint(
+        '══════════════════════════════════════════════════════════════════════',
+      );
       debugPrint('📝 [ADMIN APPROVAL] "Approve Selected" Button Clicked');
       debugPrint('Timestamp: ${DateTime.now().toLocal()}');
       debugPrint('Total Invoices to Approve: ${invoicesToApprove.length}');
-      debugPrint('----------------------------------------------------------------------');
+      debugPrint(
+        '----------------------------------------------------------------------',
+      );
       if (detailsLog.isNotEmpty) {
-        debugPrint(detailsLog.join('\n----------------------------------------------------------------------\n'));
+        debugPrint(
+          detailsLog.join(
+            '\n----------------------------------------------------------------------\n',
+          ),
+        );
       } else {
         debugPrint('Invoices to approve payload: $invoicesToApprove');
       }
-      debugPrint('----------------------------------------------------------------------');
+      debugPrint(
+        '----------------------------------------------------------------------',
+      );
       debugPrint('API Request Details:');
       debugPrint('  - HTTP Method: POST');
       debugPrint('  - URL: $adminUrl');
       debugPrint('  - Payload: {"selectedInvoices": $payload}');
-      debugPrint('══════════════════════════════════════════════════════════════════════');
+      debugPrint(
+        '══════════════════════════════════════════════════════════════════════',
+      );
 
       await service.submitSelectedInvoices(token, payload);
 
@@ -1535,7 +1648,9 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
           if (e is PermissionDeniedException) {
             displayMsg = e.message;
           } else {
-            displayMsg = displayMsg.replaceAll('Exception: ', '').replaceAll('PermissionDeniedException: ', '');
+            displayMsg = displayMsg
+                .replaceAll('Exception: ', '')
+                .replaceAll('PermissionDeniedException: ', '');
           }
 
           showDialog<void>(
@@ -1659,40 +1774,46 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
     }
 
     // Generic error
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 60, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(
-              'Error loading data',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.red.shade800,
-              ),
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading data',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error.toString(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textGrey),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () =>
+                      // ignore: unused_result
+                      ref.refresh(allSalespersonOrdersProvider.future),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryBlue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              error.toString(),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textGrey),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () =>
-                  // ignore: unused_result
-                  ref.refresh(allSalespersonOrdersProvider.future),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryBlue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Retry'),
-            ),
-          ],
+          ),
         ),
       ),
     );

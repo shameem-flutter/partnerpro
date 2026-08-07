@@ -49,10 +49,7 @@ class AdminCurrencyDropdown extends ConsumerWidget {
             value: selectedCurrency,
             isExpanded: true,
             dropdownColor: activeBgColor,
-            icon: Icon(
-              Icons.keyboard_arrow_down,
-              color: activeTextColor,
-            ),
+            icon: Icon(Icons.keyboard_arrow_down, color: activeTextColor),
             style: TextStyle(
               color: activeTextColor,
               fontWeight: FontWeight.bold,
@@ -63,7 +60,9 @@ class AdminCurrencyDropdown extends ConsumerWidget {
                 ref.read(adminCurrencyProvider.notifier).state = newValue;
               }
             },
-            items: CurrencyUtils.currencies.map<DropdownMenuItem<String>>((String value) {
+            items: CurrencyUtils.currencies.map<DropdownMenuItem<String>>((
+              String value,
+            ) {
               return DropdownMenuItem<String>(
                 value: value,
                 child: Text(

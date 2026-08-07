@@ -62,20 +62,33 @@ class AdminIncentiveReportScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 350),
-        child: salesReportAsync.when(
-          data: (report) => _SalesReportContent(
-            report: report,
-            selectedCurrency: selectedCurrency,
-          ),
-          loading: () => const Padding(
-            padding: EdgeInsets.all(16),
-            child: LoadingSkeleton(),
-          ),
-          error: (err, stack) => ErrorState(
-            error: err,
-            onRetry: () => ref.refresh(salesReportProvider.future),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          // ignore: unused_result
+          ref.refresh(salesReportProvider.future);
+        },
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          child: salesReportAsync.when(
+            data: (report) => _SalesReportContent(
+              report: report,
+              selectedCurrency: selectedCurrency,
+            ),
+            loading: () => SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              child: const LoadingSkeleton(),
+            ),
+            error: (err, stack) => SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.7,
+                child: ErrorState(
+                  error: err,
+                  onRetry: () => ref.refresh(salesReportProvider.future),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -135,12 +148,8 @@ class _SalesReportContent extends ConsumerWidget {
       return true;
     }).toList();
 
-    // Sort entries by newest first
-    entries.sort((a, b) {
-      final dateA = DateTime.tryParse(a.invoiceDate) ?? DateTime(1970);
-      final dateB = DateTime.tryParse(b.invoiceDate) ?? DateTime(1970);
-      return dateB.compareTo(dateA);
-    });
+    // Sort entries by ID descending (latest first: 6, 3, 1...)
+    entries.sort((a, b) => b.id.compareTo(a.id));
 
     final displayCurrency = selectedCurrency == '-- Select Currency --'
         ? 'AED'
@@ -662,11 +671,7 @@ class DateFilterRow extends ConsumerWidget {
                 }).toList();
 
                 // Apply local sorting (same as UI)
-                entries.sort((a, b) {
-                  final dateA = DateTime.tryParse(a.invoiceDate) ?? DateTime(1970);
-                  final dateB = DateTime.tryParse(b.invoiceDate) ?? DateTime(1970);
-                  return dateB.compareTo(dateA);
-                });
+                entries.sort((a, b) => b.id.compareTo(a.id));
 
                 // Get currency and conversion target (same as UI)
                 final selectedCurrency = ref.read(adminCurrencyProvider);
@@ -1023,24 +1028,19 @@ class _SalesReportCardState extends State<SalesReportCard> {
 
     final displayCurrency = targetCurrency;
 
-    final convertedAmount = CurrencyUtils.convertAmount(
-      widget.entry.totalAmount,
-      widget.entry.currency,
-      targetCurrency,
-    );
     final convertedCredit = CurrencyUtils.convertAmount(
       widget.entry.commissionAmount,
-      widget.entry.currency,
+      'AED',
       targetCurrency,
     );
     final convertedDebit = CurrencyUtils.convertAmount(
       widget.entry.debit,
-      widget.entry.currency,
+      'AED',
       targetCurrency,
     );
     final convertedBalance = CurrencyUtils.convertAmount(
       widget.entry.balance,
-      widget.entry.currency,
+      'AED',
       targetCurrency,
     );
 
@@ -1100,21 +1100,26 @@ class _SalesReportCardState extends State<SalesReportCard> {
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF032267),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'BAL: $displayCurrency ${convertedBalance.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF032267),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    'BAL: $displayCurrency ${convertedBalance.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -1225,7 +1230,7 @@ class _SalesReportCardState extends State<SalesReportCard> {
                         'Invoice Amount',
                         widget.entry.totalAmount == 0.0
                             ? 'No Incentive'
-                            : '$displayCurrency ${convertedAmount.toStringAsFixed(2)}',
+                            : '${widget.entry.currency} ${widget.entry.totalAmount.toStringAsFixed(2)}',
                         valueColor: widget.entry.totalAmount == 0.0
                             ? Colors.red
                             : null,

@@ -38,42 +38,59 @@ class AuthService {
     debugPrint('🔐 [AUTH] Login attempt for: ${email.trim()}');
     debugPrint('═══════════════════════════════════════════════');
 
-    // ── Step 1: Try admin server ─────────────────────────────────────────────
+    // ── Step 1: Resolve URLs ─────────────────────────────────────────────────
+    final adminUrl = await ApiConfig.getAdminFullUrl('/api/v1/dashboard/login/');
+    final normalUrl = await ApiConfig.getFullUrl('/api/v1/dashboard/login/');
+    final bool urlsIdentical = adminUrl == normalUrl;
+
+    // ── Step 2: Try admin server ─────────────────────────────────────────────
     debugPrint('🔐 [AUTH] Step 1: Trying ADMIN server…');
     try {
-      final adminUrl = await ApiConfig.getAdminFullUrl(
-        '/api/v1/dashboard/login/',
+      final adminSession = await _doLogin(
+        adminUrl,
+        email,
+        password,
+        timeout: urlsIdentical ? const Duration(seconds: 60) : const Duration(seconds: 10),
       );
-      final adminSession = await _doLogin(adminUrl, email, password);
 
-      if (adminSession.role == UserRole.admin) {
+      if (adminSession.userType == AppUserType.manager) {
         debugPrint(
-          '🔐 [AUTH] ✅ Admin server login successful → ADMIN 🛡️',
+          '🔐 [AUTH] ✅ Admin server login successful → MANAGER 🛡️',
+        );
+        debugPrint('═══════════════════════════════════════════════');
+        return adminSession;
+      }
+
+      if (urlsIdentical) {
+        debugPrint(
+          '🔐 [AUTH] ✅ Admin & Normal URLs identical, using result → ${adminSession.userType.name.toUpperCase()} 👤',
         );
         debugPrint('═══════════════════════════════════════════════');
         return adminSession;
       }
 
       debugPrint(
-        '🔐 [AUTH] ⚠️  Admin server returned no permissions → trying normal server…',
+        '🔐 [AUTH] ⚠️  Admin server returned non-manager → trying normal server…',
       );
 
-      // ── Step 2: Try normal server ──────────────────────────────────────────
+      // ── Step 3: Try normal server ──────────────────────────────────────────
       debugPrint('🔐 [AUTH] Step 2: Trying NORMAL server…');
       try {
-        final normalUrl = await ApiConfig.getFullUrl(
-          '/api/v1/dashboard/login/',
+        final normalSession = await _doLogin(
+          normalUrl,
+          email,
+          password,
+          timeout: const Duration(seconds: 60),
         );
-        final normalSession = await _doLogin(normalUrl, email, password);
         debugPrint(
-          '🔐 [AUTH] ✅ Normal server login successful → NORMAL USER 👤',
+          '🔐 [AUTH] ✅ Normal server login successful → ${normalSession.userType.name.toUpperCase()} 👤',
         );
         debugPrint('═══════════════════════════════════════════════');
         return normalSession;
       } catch (_) {
         // Normal server failed too – return the admin-server session (no perms)
         debugPrint(
-          '🔐 [AUTH] ⚠️  Normal server also failed → using admin server result (no permissions)',
+          '🔐 [AUTH] ⚠️  Normal server also failed → using admin server result (non-manager)',
         );
         debugPrint('═══════════════════════════════════════════════');
         return adminSession;
@@ -83,15 +100,22 @@ class AuthService {
       debugPrint(
         '🔐 [AUTH] ⚠️  Admin server failed ($adminError) → trying normal server…',
       );
+      
+      if (urlsIdentical) {
+        debugPrint('🔐 [AUTH] ⚠️ URLs are identical, aborting login...');
+        rethrow;
+      }
 
-      // ── Step 2 (fallback): Normal server ──────────────────────────────────
+      // ── Step 3 (fallback): Normal server ──────────────────────────────────
       debugPrint('🔐 [AUTH] Step 2: Trying NORMAL server…');
-      final normalUrl = await ApiConfig.getFullUrl(
-        '/api/v1/dashboard/login/',
+      final normalSession = await _doLogin(
+        normalUrl,
+        email,
+        password,
+        timeout: const Duration(seconds: 60),
       );
-      final normalSession = await _doLogin(normalUrl, email, password);
       debugPrint(
-        '🔐 [AUTH] ✅ Normal server login successful → NORMAL USER 👤',
+        '🔐 [AUTH] ✅ Normal server login successful → ${normalSession.userType.name.toUpperCase()} 👤',
       );
       debugPrint('═══════════════════════════════════════════════');
       return normalSession;
@@ -105,8 +129,9 @@ class AuthService {
   Future<AuthSession> _doLogin(
     String loginUrl,
     String email,
-    String password,
-  ) async {
+    String password, {
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     debugPrint('🔐 [AUTH]   → POST $loginUrl');
 
     try {
@@ -121,9 +146,9 @@ class AuthService {
             'Content-Type': 'application/json',
           },
           followRedirects: false,
-          // Short timeout so admin-server failures don't block the user
-          sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
+          // Timeout config
+          sendTimeout: timeout,
+          receiveTimeout: timeout,
         ),
       );
 
@@ -203,13 +228,10 @@ class AuthService {
 
       PermissionService.instance.initFromToken(accessToken);
       final userModel = AuthUser.fromJson(userJson);
-      var role = permissions.isNotEmpty ? UserRole.admin : UserRole.normal;
-      if (userModel.userType == 'end_user') {
-        role = UserRole.normal;
-      }
+      final appUserType = AppUserTypeMapper.fromString(userModel.userType);
 
       debugPrint(
-        '🔐 [AUTH]   Final role: ${role == UserRole.admin ? "ADMIN 🛡️" : "NORMAL USER 👤"}',
+        '🔐 [AUTH]   Final type: ${appUserType.name.toUpperCase()}',
       );
 
       return AuthSession(
@@ -217,7 +239,7 @@ class AuthService {
         refreshToken: refreshToken,
         user: userModel,
         permissions: permissions,
-        role: role,
+        userType: appUserType,
       );
     } on DioException catch (error) {
       debugPrint(
@@ -285,5 +307,30 @@ class AuthService {
       if (value is String && value.trim().isNotEmpty) return value;
     }
     return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Device Registration for FCM
+  // ---------------------------------------------------------------------------
+
+  Future<void> registerDeviceToken(String accessToken, String fcmToken) async {
+    try {
+      final url = await ApiConfig.getFullUrl('/api/v1/dashboard/register-device/');
+      await _dio.post<dynamic>(
+        url,
+        data: <String, dynamic>{
+          'token': fcmToken,
+        },
+        options: Options(
+          headers: <String, String>{
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+      debugPrint('🔐 [AUTH] ✅ Device registered for push notifications');
+    } catch (e) {
+      debugPrint('🔐 [AUTH] ⚠️ Failed to register device: $e');
+    }
   }
 }

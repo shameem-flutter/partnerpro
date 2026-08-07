@@ -1,20 +1,29 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:partnerpro/firebase_options.dart';
 import 'models/auth_session.dart';
 import 'screens/user/dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/user/statement_screen.dart';
 import 'screens/user/view_more_screen.dart';
 import 'screens/user/redeem_details_screen.dart';
+import 'screens/user/user_incentive_report_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'theme/app_colors.dart';
 import 'providers/auth_provider.dart';
-import 'providers/dashboard_provider.dart';
-import 'providers/statement_provider.dart';
-import 'providers/redemption_provider.dart';
-import 'providers/admin_provider.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+  await NotificationService.instance.initialize();
   runApp(const ProviderScope(child: PartnerProApp()));
 }
 
@@ -83,6 +92,8 @@ class _AuthBootstrapScreenState extends ConsumerState<AuthBootstrapScreen> {
         return 2;
       case ActiveScreen.redeemDetails:
         return 3;
+      case ActiveScreen.incentiveReport:
+        return 4;
     }
   }
 
@@ -113,9 +124,9 @@ class _AuthBootstrapScreenState extends ConsumerState<AuthBootstrapScreen> {
     final authState = ref.watch(authNotifierProvider);
 
     // -----------------------------------------------------------------------
-    // Loading state
+    // Initial App Loading State
     // -----------------------------------------------------------------------
-    if (authState.isLoading) {
+    if (authState.isInitializing) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -128,54 +139,15 @@ class _AuthBootstrapScreenState extends ConsumerState<AuthBootstrapScreen> {
     }
 
     // -----------------------------------------------------------------------
-    // Admin flow
+    // Dashboard Routing by User Type
     // -----------------------------------------------------------------------
-    if (session.role == UserRole.admin) {
-      final allSalespersonOrdersAsync = ref.watch(allSalespersonOrdersProvider);
-      final salesReportAsync = ref.watch(salesReportProvider);
-      final allReferralOrdersAsync = ref.watch(allReferralOrdersProvider);
-
-      if ((allSalespersonOrdersAsync.isLoading &&
-              !allSalespersonOrdersAsync.hasValue) ||
-          (salesReportAsync.isLoading && !salesReportAsync.hasValue) ||
-          (allReferralOrdersAsync.isLoading &&
-              !allReferralOrdersAsync.hasValue)) {
-        return const Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
-            ),
-          ),
-        );
-      }
-
+    if (session.userType == AppUserType.manager) {
       return AdminDashboardScreen(user: session.user);
     }
 
     // -----------------------------------------------------------------------
     // Normal user flow  (driven by Riverpod navigationProvider)
     // -----------------------------------------------------------------------
-    final dashboardAsync = ref.watch(dashboardDataProvider);
-    final statementAsync = ref.watch(statementDataProvider);
-    final viewMoreAsync = ref.watch(viewMoreDataProvider);
-    final redemptionBalanceAsync = ref.watch(redemptionBalanceProvider);
-    final salesReportAsync = ref.watch(salesReportDataProvider);
-
-    if ((dashboardAsync.isLoading && !dashboardAsync.hasValue) ||
-        (statementAsync.isLoading && !statementAsync.hasValue) ||
-        (viewMoreAsync.isLoading && !viewMoreAsync.hasValue) ||
-        (redemptionBalanceAsync.isLoading &&
-            !redemptionBalanceAsync.hasValue) ||
-        (salesReportAsync.isLoading && !salesReportAsync.hasValue)) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
-          ),
-        ),
-      );
-    }
-
     return PageView(
       controller: _pageController,
       physics: const NeverScrollableScrollPhysics(),
@@ -184,6 +156,7 @@ class _AuthBootstrapScreenState extends ConsumerState<AuthBootstrapScreen> {
         const KeepAliveWrapper(child: StatementScreen()),
         const KeepAliveWrapper(child: ViewMoreScreen()),
         const KeepAliveWrapper(child: RedeemDetailsScreen()),
+        const KeepAliveWrapper(child: UserIncentiveReportScreen()),
       ],
     );
   }

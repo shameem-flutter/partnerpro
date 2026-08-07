@@ -102,16 +102,21 @@ class DashboardOrder {
     for (var d in parsedDetails) {
       commSum += d.commissionAmount;
     }
-    double parsedComm = _parseDouble(json['commission_amount_total']);
+    double parsedComm = _parseDouble(json['commission_amount_total'] ?? json['total_commission'] ?? json['commission'] ?? json['approved_total'] ?? json['commission_amount'] ?? json['commission_earned'] ?? json['earned_commission'] ?? json['approved_commission']);
     if (parsedComm == 0.0) {
       parsedComm = commSum;
+    }
+
+    String refNo = json['invoice_reference_no']?.toString() ?? json['name']?.toString() ?? '';
+    if (refNo.isEmpty && json['id'] != null) {
+      refNo = 'Ref #${json['id']}';
     }
 
     return DashboardOrder(
       id: json['id'] is int ? json['id'] as int : (json['id'] != null ? int.tryParse(json['id'].toString()) : null),
       invoiceDate: json['invoice_date']?.toString() ?? '',
       platform: json['platform']?.toString() ?? '',
-      invoiceReferenceNo: json['invoice_reference_no']?.toString() ?? json['name']?.toString() ?? '',
+      invoiceReferenceNo: refNo,
       customerName: json['customer_name']?.toString() ?? '',
       salespersonName: json['salesperson_name']?.toString() ?? json['salesperson_email']?.toString() ?? json['salesperson_id']?.toString() ?? '',
       companyName: json['company_name']?.toString() ?? '',
@@ -125,7 +130,10 @@ class DashboardOrder {
 
   static double _parseDouble(dynamic value) {
     if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
+    if (value is String) {
+      String cleaned = value.replaceAll('%', '').replaceAll(',', '').trim();
+      return double.tryParse(cleaned) ?? 0.0;
+    }
     return 0.0;
   }
 }
@@ -160,7 +168,7 @@ class InvoiceDetail {
   final double commissionAmount;
 
   factory InvoiceDetail.fromJson(Map<dynamic, dynamic> json) {
-    final double commAmount = _parseDouble(json['commission_amount']);
+    final double commAmount = _parseDouble(json['commission_amount'] ?? json['commission'] ?? json['approved_commission'] ?? json['total_commission']);
     final double amtTotal = _parseDouble(json['amount_total']);
     return InvoiceDetail(
       productName: json['product_name']?.toString() ?? json['invoice_name']?.toString() ?? '',
@@ -180,7 +188,10 @@ class InvoiceDetail {
 
   static double _parseDouble(dynamic value) {
     if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
+    if (value is String) {
+      String cleaned = value.replaceAll('%', '').replaceAll(',', '').trim();
+      return double.tryParse(cleaned) ?? 0.0;
+    }
     return 0.0;
   }
 

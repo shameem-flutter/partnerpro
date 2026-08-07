@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart'; // Added for compute
 import '../models/dashboard_data.dart';
 import '../models/view_more_data.dart';
 import 'api_config.dart';
@@ -58,74 +59,42 @@ class DashboardService {
   Future<DashboardData> fetchHomeData(String accessToken) async {
     try {
       final ordersUrl = await ApiConfig.getFullUrl('/api/v1/order-management/orders/');
-      final response = await _dio.get<dynamic>(
-        ordersUrl,
-        options: Options(
-          headers: <String, String>{
-            'Authorization': 'Bearer $accessToken',
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
+      final referralOrdersUrl = await ApiConfig.getFullUrl('/api/v1/dashboard/referral-orders/');
 
-      dynamic rawData = response.data;
-      if (rawData is String) {
-        rawData = jsonDecode(rawData);
-      }
-
-      final normalized = _normalizeMap(rawData);
-      if (normalized == null) {
-        throw Exception('Received invalid response format from server');
-      }
-
-      final ordersListRaw = normalized['orders'] as List? ?? [];
-      final List<Map<String, dynamic>> allOrdersJson = ordersListRaw
-          .map((o) => _normalizeMap(o))
-          .whereType<Map<String, dynamic>>()
-          .toList();
-
-      final directOrdersJson = allOrdersJson.where((o) {
-        final refs = o['referral_details'] as List? ?? [];
-        return refs.isEmpty;
-      }).toList();
-
-      final referralOrdersJson = allOrdersJson.where((o) {
-        final refs = o['referral_details'] as List? ?? [];
-        return refs.isNotEmpty;
-      }).toList();
-
-      double totalCommission = 0.0;
-      for (final o in directOrdersJson) {
-        totalCommission += _parseDouble(o['commission_amount_total']);
-      }
-
-      double totalCommissionRef = 0.0;
-      for (final o in referralOrdersJson) {
-        final refs = o['referral_details'] as List? ?? [];
-        for (final r in refs) {
-          totalCommissionRef += _parseDouble(r['commission_amount']);
-        }
-      }
-
-      int approvedOrdersCount = directOrdersJson.where((o) => o['is_approved'] == true).length;
-      int pendingOrdersCount = directOrdersJson.where((o) => o['is_approved'] == false).length;
-
-      int refApprovedOrdersCount = referralOrdersJson.where((o) => o['is_approved'] == true).length;
-      int refPendingOrdersCount = referralOrdersJson.where((o) => o['is_approved'] == false).length;
-
-      final dashboardMap = <String, dynamic>{
-        'orders': directOrdersJson,
-        'referral_orders': referralOrdersJson,
-        'today_date': DateTime.now().toIso8601String().split('T').first,
-        'total_commission': totalCommission,
-        'approved_orders_count': approvedOrdersCount,
-        'pending_orders_count': pendingOrdersCount,
-        'total_commission_ref': totalCommissionRef,
-        'ref_approved_orders_count': refApprovedOrdersCount,
-        'ref_pending_orders_count': refPendingOrdersCount,
+      final headers = <String, String>{
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
       };
 
-      return DashboardData.fromJson(dashboardMap);
+      final responses = await Future.wait([
+        _dio.get<dynamic>(ordersUrl, options: Options(headers: headers)),
+        _dio.get<dynamic>(referralOrdersUrl, options: Options(headers: headers)).catchError(
+          (_) => Response(requestOptions: RequestOptions()),
+        ),
+      ]);
+
+      dynamic rawOrdersData = responses[0].data;
+      if (rawOrdersData is String) {
+        rawOrdersData = jsonDecode(rawOrdersData);
+      }
+      final normalizedOrders = _normalizeMap(rawOrdersData) ?? {};
+
+      dynamic rawRefData = responses[1].data;
+      if (rawRefData is String) {
+        rawRefData = jsonDecode(rawRefData);
+      }
+      final normalizedRef = _normalizeMap(rawRefData) ?? {};
+
+      final combinedData = <String, dynamic>{
+        ...normalizedOrders,
+        ...normalizedRef,
+      };
+
+      // OFF-THREAD OPTIMIZATION:
+      // Moving the heavy filtering, mapping, and object instantiation 
+      // of 1,856+ items to a background isolate so the UI doesn't freeze.
+      return await compute(_processDashboardData, combinedData);
+
     } on DioException catch (e) {
       String message = 'Failed to load dashboard data. Please try again.';
       dynamic errorData = e.response?.data;
@@ -148,13 +117,13 @@ class DashboardService {
     }
   }
 
-  double _parseDouble(dynamic value) {
+  static double _parseDouble(dynamic value) {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value) ?? 0.0;
     return 0.0;
   }
 
-  Map<String, dynamic>? _normalizeMap(dynamic value) {
+  static Map<String, dynamic>? _normalizeMap(dynamic value) {
     if (value is Map<String, dynamic>) {
       return value;
     }
@@ -167,4 +136,75 @@ class DashboardService {
 
     return null;
   }
+}
+
+// Top-level function to run in a background isolate
+DashboardData _processDashboardData(Map<String, dynamic> combinedData) {
+  // Direct orders from /api/v1/order-management/orders/
+  final ordersListRaw = combinedData['orders'] as List? ?? [];
+  final List<Map<String, dynamic>> allOrdersJson = ordersListRaw
+      .map((o) => DashboardService._normalizeMap(o))
+      .whereType<Map<String, dynamic>>()
+      .toList();
+
+  final directOrdersJson = allOrdersJson.where((o) {
+    final refs = o['referral_details'] as List? ?? [];
+    return refs.isEmpty;
+  }).toList();
+
+  // Extract direct order metrics directly from API response if present
+  final double totalCommission = combinedData.containsKey('total_commission')
+      ? DashboardService._parseDouble(combinedData['total_commission'])
+      : directOrdersJson
+          .where((o) => o['is_approved'] == true)
+          .fold(0.0, (sum, o) => sum + DashboardService._parseDouble(o['commission_amount_total']));
+
+  final int approvedOrdersCount = combinedData.containsKey('approved_orders_count')
+      ? (combinedData['approved_orders_count'] is int
+          ? combinedData['approved_orders_count'] as int
+          : int.tryParse(combinedData['approved_orders_count']?.toString() ?? '') ?? 0)
+      : directOrdersJson.where((o) => o['is_approved'] == true).length;
+
+  final int pendingOrdersCount = combinedData.containsKey('pending_orders_count')
+      ? (combinedData['pending_orders_count'] is int
+          ? combinedData['pending_orders_count'] as int
+          : int.tryParse(combinedData['pending_orders_count']?.toString() ?? '') ?? 0)
+      : directOrdersJson.where((o) => o['is_approved'] == false).length;
+
+  // Referral orders from /api/v1/dashboard/referral-orders/
+  final refOrdersListRaw = combinedData['referral_orders'] as List? ?? [];
+  final List<Map<String, dynamic>> referralOrdersJson = refOrdersListRaw
+      .map((o) => DashboardService._normalizeMap(o))
+      .whereType<Map<String, dynamic>>()
+      .toList();
+
+  final double totalCommissionRef = DashboardService._parseDouble(
+    combinedData['total_commission_ref'],
+  );
+
+  final int refApprovedOrdersCount = combinedData['ref_approved_orders_count'] is int
+      ? combinedData['ref_approved_orders_count'] as int
+      : int.tryParse(combinedData['ref_approved_orders_count']?.toString() ?? '') ?? 0;
+
+  final int refPendingOrdersCount = combinedData['ref_pending_orders_count'] is int
+      ? combinedData['ref_pending_orders_count'] as int
+      : int.tryParse(combinedData['ref_pending_orders_count']?.toString() ?? '') ?? 0;
+
+  final String todayDate = combinedData['today_date']?.toString().isNotEmpty == true
+      ? combinedData['today_date'].toString()
+      : DateTime.now().toIso8601String().split('T').first;
+
+  final dashboardMap = <String, dynamic>{
+    'orders': directOrdersJson,
+    'referral_orders': referralOrdersJson,
+    'today_date': todayDate,
+    'total_commission': totalCommission,
+    'approved_orders_count': approvedOrdersCount,
+    'pending_orders_count': pendingOrdersCount,
+    'total_commission_ref': totalCommissionRef,
+    'ref_approved_orders_count': refApprovedOrdersCount,
+    'ref_pending_orders_count': refPendingOrdersCount,
+  };
+
+  return DashboardData.fromJson(dashboardMap);
 }

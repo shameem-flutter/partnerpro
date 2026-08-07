@@ -22,41 +22,50 @@ class AdminAllReferralOrdersScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: _buildAppBar(context, ref),
-      body: Stack(
-        children: [
-          if (ordersAsync.hasValue)
-            _buildBody(
-              context,
-              ref,
-              ordersAsync.value!,
-              selectedId,
-              selectedCurrency,
-            )
-          else if (ordersAsync.isLoading)
-            const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppColors.primaryBlue,
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(allReferralOrdersProvider.future),
+        child: Stack(
+          children: [
+            if (ordersAsync.hasValue)
+              _buildBody(
+                context,
+                ref,
+                ordersAsync.value!,
+                selectedId,
+                selectedCurrency,
+              )
+            else if (ordersAsync.isLoading)
+              SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.7,
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primaryBlue,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            )
-          else
-            _buildError(context, ref, ordersAsync.error!),
+              )
+            else
+              _buildError(context, ref, ordersAsync.error!),
 
-          if (ordersAsync.hasValue && ordersAsync.isLoading)
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: LinearProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppColors.primaryBlue,
+            if (ordersAsync.hasValue && ordersAsync.isLoading)
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryBlue,
+                  ),
+                  backgroundColor: Colors.transparent,
+                  minHeight: 3,
                 ),
-                backgroundColor: Colors.transparent,
-                minHeight: 3,
               ),
-            ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: Consumer(
         builder: (context, ref, child) {
@@ -413,14 +422,15 @@ class AdminAllReferralOrdersScreen extends ConsumerWidget {
       formattedDate = '$day/$month/${parsedDate.year}';
     }
 
-    final commVal = order.commissionAmountTotal;
+    final commVal = CurrencyUtils.convertAmount(order.commissionAmountTotal, order.currency, selectedCurrency);
     final commText = commVal.toStringAsFixed(2);
-    final displayCurrency = order.currency;
+    final displayCurrency = selectedCurrency == '-- Select Currency --'
+        ? order.currency
+        : selectedCurrency;
 
     final selectedSet = ref.watch(selectedReferralsProvider);
     final bool isSelected = order.id != null && selectedSet.contains(order.id);
-    final bool isApproved =
-        order.isApproved || platformText.toLowerCase() == 'approved';
+    final bool isApproved = order.isApproved;
     final bool showCheckbox = order.id != null && !isApproved;
 
     return GestureDetector(
@@ -606,7 +616,7 @@ class AdminAllReferralOrdersScreen extends ConsumerWidget {
                               ),
                             ),
                             Text(
-                              '${r.currency} ${r.commissionAmount.toStringAsFixed(2)}',
+                              '$displayCurrency ${CurrencyUtils.convertAmount(r.commissionAmount, r.currency, selectedCurrency).toStringAsFixed(2)}',
                               style: const TextStyle(
                                 fontSize: 13,
                                 color: AppColors.approvedGreen,
@@ -666,9 +676,7 @@ class AdminAllReferralOrdersScreen extends ConsumerWidget {
                 final selectedSet = sheetRef.watch(selectedReferralsProvider);
                 final bool isSelected =
                     order.id != null && selectedSet.contains(order.id);
-                final bool isApproved =
-                    order.isApproved ||
-                    order.platform.toLowerCase() == 'approved';
+                final bool isApproved = order.isApproved;
                 final bool canApprove = order.id != null && !isApproved;
 
                 return SingleChildScrollView(
@@ -778,7 +786,7 @@ class AdminAllReferralOrdersScreen extends ConsumerWidget {
                                           ),
                                         ),
                                         Text(
-                                          '${r.currency} ${r.commissionAmount.toStringAsFixed(2)}',
+                                          '$displayCurrency ${CurrencyUtils.convertAmount(r.commissionAmount, r.currency, selectedCurrency).toStringAsFixed(2)}',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.bold,
                                             color: AppColors.approvedGreen,
@@ -1064,41 +1072,47 @@ class AdminAllReferralOrdersScreen extends ConsumerWidget {
         },
       );
     }
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 60, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(
-              'Error loading referral orders',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.red.shade800,
-              ),
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading referral orders',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error.toString(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textGrey),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    // ignore: unused_result
+                    ref.refresh(allReferralOrdersProvider.future);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryBlue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              error.toString(),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textGrey),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                // ignore: unused_result
-                ref.refresh(allReferralOrdersProvider.future);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryBlue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Retry'),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import '../models/statement_order.dart';
+import '../models/admin_models.dart';
+import 'package:flutter/material.dart';
 import '../services/statement_service.dart';
 import 'auth_provider.dart';
 import 'dio_provider.dart';
@@ -10,15 +12,41 @@ final statementServiceProvider = Provider<StatementService>((ref) {
   return StatementService(dio: dio);
 });
 
-final statementDataProvider = FutureProvider<StatementOrderResponse>((ref) async {
+final statementDataProvider =
+    FutureProvider.autoDispose<StatementOrderResponse>((ref) async {
   final authState = ref.watch(authNotifierProvider);
-  
-  // Primary: token from user session. Fallback: prompt token.
-  final token = authState.session?.accessToken ?? 
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc5Nzg3OTA4LCJpYXQiOjE3Nzk3MDE1MDgsImp0aSI6IjQwMzU3MmIzMzVmYTQyNTNiOTkyN2JkYjY4MWQ3YjY3IiwidXNlcl9pZCI6IjQ3In0.i6rZZ-VOL0Gwo1rgz0NqtA5CdcBbHZ0xyYUWLuhB_o0';
+  final token = authState.session?.accessToken ?? '';
+  if (token.isEmpty) throw Exception('No auth token found');
 
   final service = ref.watch(statementServiceProvider);
   return service.fetchOrders(token);
+});
+
+final userSalesReportDateRangeProvider =
+    StateProvider.autoDispose<DateTimeRange?>((ref) => null);
+final userCurrencyProvider = StateProvider.autoDispose<String>((ref) => 'AED');
+
+final userSalesReportProvider =
+    FutureProvider.autoDispose<SalesReportResponse>((ref) async {
+  final authState = ref.watch(authNotifierProvider);
+  final token = authState.session?.accessToken ?? '';
+  if (token.isEmpty) throw Exception('No auth token found');
+
+  final dateRange = ref.watch(userSalesReportDateRangeProvider);
+  final service = ref.watch(statementServiceProvider);
+
+  String? fromDateStr;
+  String? toDateStr;
+  if (dateRange != null) {
+    fromDateStr = "${dateRange.start.year}-${dateRange.start.month.toString().padLeft(2, '0')}-${dateRange.start.day.toString().padLeft(2, '0')}";
+    toDateStr = "${dateRange.end.year}-${dateRange.end.month.toString().padLeft(2, '0')}-${dateRange.end.day.toString().padLeft(2, '0')}";
+  }
+
+  return service.fetchUserSalesReport(
+    token,
+    fromDate: fromDateStr,
+    toDate: toDateStr,
+  );
 });
 
 class StatementFilterState {

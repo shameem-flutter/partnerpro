@@ -19,14 +19,14 @@ final adminServiceProvider = Provider<AdminService>((ref) {
 // Selected Salesperson ID  (used as query param)
 // ---------------------------------------------------------------------------
 
-final selectedSalespersonIdProvider = StateProvider<String?>((ref) => null);
+final selectedSalespersonIdProvider = StateProvider.autoDispose<String?>((ref) => null);
 
 // ---------------------------------------------------------------------------
 // 1.  All Salesperson Orders
 // ---------------------------------------------------------------------------
 
 final allSalespersonOrdersProvider =
-    FutureProvider<AllSalespersonOrdersResponse>((ref) async {
+    FutureProvider.autoDispose<AllSalespersonOrdersResponse>((ref) async {
       final authState = ref.watch(authNotifierProvider);
       final token = authState.session?.accessToken ?? '';
       final salespersonId = ref.watch(selectedSalespersonIdProvider);
@@ -43,9 +43,9 @@ final allSalespersonOrdersProvider =
 
 /// Separate selected salesperson for the incentive report screen
 final incentiveReportSalespersonIdProvider =
-    StateProvider<String?>((ref) => null);
+    StateProvider.autoDispose<String?>((ref) => null);
 
-final salesReportProvider = FutureProvider<SalesReportResponse>((ref) async {
+final salesReportProvider = FutureProvider.autoDispose<SalesReportResponse>((ref) async {
   final authState = ref.watch(authNotifierProvider);
   final token = authState.session?.accessToken ?? '';
   final salespersonId = ref.watch(incentiveReportSalespersonIdProvider);
@@ -72,10 +72,10 @@ final salesReportProvider = FutureProvider<SalesReportResponse>((ref) async {
 // ---------------------------------------------------------------------------
 
 final allReferralOrdersSalespersonIdProvider =
-    StateProvider<String?>((ref) => null);
+    StateProvider.autoDispose<String?>((ref) => null);
 
 final allReferralOrdersProvider =
-    FutureProvider<AllReferralOrdersResponse>((ref) async {
+    FutureProvider.autoDispose<AllReferralOrdersResponse>((ref) async {
       final authState = ref.watch(authNotifierProvider);
       final token = authState.session?.accessToken ?? '';
       final salespersonId = ref.watch(allReferralOrdersSalespersonIdProvider);
@@ -100,26 +100,26 @@ final salespersonsListProvider = Provider<AsyncValue<List<Salesperson>>>((ref) {
 // Admin Currency Provider (shared across the 4 admin screens)
 // ---------------------------------------------------------------------------
 
-final adminCurrencyProvider = StateProvider<String>((ref) => 'AED');
+final adminCurrencyProvider = StateProvider.autoDispose<String>((ref) => 'AED');
 
 // ---------------------------------------------------------------------------
 // 4. Sales Report Filters & Search
 // ---------------------------------------------------------------------------
-final salesReportSearchInvoiceProvider = StateProvider<String>((ref) => '');
-final salesReportSearchCustomerProvider = StateProvider<String>((ref) => '');
-final salesReportDateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
-final salesReportSortAscendingProvider = StateProvider<bool>((ref) => false);
+final salesReportSearchInvoiceProvider = StateProvider.autoDispose<String>((ref) => '');
+final salesReportSearchCustomerProvider = StateProvider.autoDispose<String>((ref) => '');
+final salesReportDateRangeProvider = StateProvider.autoDispose<DateTimeRange?>((ref) => null);
+final salesReportSortAscendingProvider = StateProvider.autoDispose<bool>((ref) => false);
 
 // ---------------------------------------------------------------------------
 // 5. Selected Invoices & Commission percentages for Approval
 // ---------------------------------------------------------------------------
 /// Map of invoice_id -> commission_percentage
-final selectedInvoicesProvider = StateProvider<Map<int, double>>((ref) => {});
+final selectedInvoicesProvider = StateProvider.autoDispose<Map<int, double>>((ref) => {});
 
 // ---------------------------------------------------------------------------
 // 6. Selected Referral Orders for Approval
 // ---------------------------------------------------------------------------
 /// Set of referral_order_ids selected for approval
-final selectedReferralsProvider = StateProvider<Set<int>>((ref) => {});
+final selectedReferralsProvider = StateProvider.autoDispose<Set<int>>((ref) => {});
 
 

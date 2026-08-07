@@ -5,6 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/admin_provider.dart';
 import '../../services/permission_service.dart';
+import '../../utils/currency_utils.dart';
 import 'admin_all_salesperson_orders_screen.dart';
 import 'admin_all_referral_orders_screen.dart';
 import 'admin_referral_orders_screen.dart';
@@ -25,13 +26,58 @@ class AdminDashboardScreen extends ConsumerWidget {
 // Admin Home Screen
 // ---------------------------------------------------------------------------
 
-class _AdminHomeScreen extends ConsumerWidget {
+class _AdminHomeScreen extends ConsumerStatefulWidget {
   const _AdminHomeScreen({required this.user});
 
   final AuthUser user;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AdminHomeScreen> createState() => _AdminHomeScreenState();
+}
+
+class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
+  String _selectedCurrency = 'AED';
+  int _selectedAdminFilter = 0; // 0: Commission Earned, 1: Commission Redeemed, 2: Total Balance, 3: Total Salespersons
+
+
+  Widget _buildCurrencyDropdown() {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedCurrency,
+          icon: const Icon(
+            Icons.keyboard_arrow_down,
+            color: AppColors.primaryBlue,
+          ),
+          style: const TextStyle(
+            color: AppColors.primaryBlue,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _selectedCurrency = newValue;
+              });
+            }
+          },
+          items: CurrencyUtils.currencies.map<DropdownMenuItem<String>>((String value) {
+            return DropdownMenuItem<String>(value: value, child: Text(value));
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final ordersAsync = ref.watch(allSalespersonOrdersProvider);
 
     return Scaffold(
@@ -71,7 +117,7 @@ class _AdminHomeScreen extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                user.displayName,
+                widget.user.displayName,
                 style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
               const SizedBox(width: 8),
@@ -83,8 +129,8 @@ class _AdminHomeScreen extends ConsumerWidget {
                   border: Border.all(color: Colors.white30, width: 0.5),
                 ),
                 child: Text(
-                  user.formattedUserType.isNotEmpty
-                      ? user.formattedUserType
+                  widget.user.formattedUserType.isNotEmpty
+                      ? widget.user.formattedUserType
                       : 'Admin',
                   style: const TextStyle(
                     color: Colors.white,
@@ -110,9 +156,15 @@ class _AdminHomeScreen extends ConsumerWidget {
         onRefresh: () => ref.refresh(allSalespersonOrdersProvider.future),
         child: ordersAsync.when(
           data: (data) => _buildDashboardContent(context, data),
-          loading: () => const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+          loading: () => SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+                ),
+              ),
             ),
           ),
           error: (err, _) => _buildErrorState(context, ref, err.toString()),
@@ -122,6 +174,23 @@ class _AdminHomeScreen extends ConsumerWidget {
   }
 
   Widget _buildDashboardContent(BuildContext context, dynamic data) {
+    String sectionTitle;
+    switch (_selectedAdminFilter) {
+      case 0:
+        sectionTitle = 'Commission Earned Overview';
+        break;
+      case 1:
+        sectionTitle = 'Commission Redeemed Overview';
+        break;
+      case 2:
+        sectionTitle = 'Total Balance Overview';
+        break;
+      case 3:
+      default:
+        sectionTitle = 'Salespersons Overview';
+        break;
+    }
+
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
@@ -129,40 +198,49 @@ class _AdminHomeScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Admin badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.admin_panel_settings,
-                    size: 16,
-                    color: AppColors.primaryBlue,
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Admin Panel',
-                    style: TextStyle(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.3),
                     ),
                   ),
-                ],
-              ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.admin_panel_settings,
+                        size: 16,
+                        color: AppColors.primaryBlue,
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        'Admin Panel',
+                        style: TextStyle(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _buildCurrencyDropdown(),
+              ],
             ),
             const SizedBox(height: 20),
             _buildSummaryCards(data),
+            const SizedBox(height: 20),
+            _buildSectionHeader(sectionTitle),
+            const SizedBox(height: 12),
+            _buildSelectedCardDetails(context, data),
             const SizedBox(height: 24),
-            _buildSectionHeader('Overview'),
+            _buildSectionHeader('Quick Navigation'),
             const SizedBox(height: 12),
             _buildQuickActions(context),
           ],
@@ -171,11 +249,205 @@ class _AdminHomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSummaryCards(dynamic data) {
-    final totalCredit = data?.totalCredit ?? 0.0;
-    final totalDebit = data?.totalDebit ?? 0.0;
-    final totalBalance = data?.totalBalance ?? 0.0;
+  Widget _buildSelectedCardDetails(BuildContext context, dynamic data) {
+    final rawCredit = data?.totalCredit ?? 0.0;
+    final rawDebit = data?.totalDebit ?? 0.0;
+    final rawBalance = data?.totalBalance ?? 0.0;
     final salespersonsCount = (data?.salespersons as List?)?.length ?? 0;
+
+    final totalCredit = CurrencyUtils.convertAmount(rawCredit, 'AED', _selectedCurrency);
+    final totalDebit = CurrencyUtils.convertAmount(rawDebit, 'AED', _selectedCurrency);
+    final totalBalance = CurrencyUtils.convertAmount(rawBalance, 'AED', _selectedCurrency);
+
+    final displayCurrency =
+        _selectedCurrency == "-- Select Currency --" ? 'AED' : _selectedCurrency;
+
+    switch (_selectedAdminFilter) {
+      case 0:
+        return _buildCardDetailsTile(
+          title: 'Commission Earned Details',
+          value: '$displayCurrency ${totalCredit.toStringAsFixed(2)}',
+          description: 'Total commission earned across all salesperson accounts.',
+          actionLabel: 'View Orders',
+          icon: Icons.account_balance_wallet,
+          color: AppColors.approvedGreen,
+          onTapAction: () {
+            Navigator.push(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    const AdminAllSalespersonOrdersScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+              ),
+            );
+          },
+        );
+      case 1:
+        return _buildCardDetailsTile(
+          title: 'Commission Redeemed Details',
+          value: '$displayCurrency ${totalDebit.toStringAsFixed(2)}',
+          description: 'Total commission redeemed across all accounts.',
+          actionLabel: 'View Referrals',
+          icon: Icons.trending_down,
+          color: Colors.redAccent,
+          onTapAction: () {
+            Navigator.push(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    const AdminAllReferralOrdersScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+              ),
+            );
+          },
+        );
+      case 2:
+        return _buildCardDetailsTile(
+          title: 'Total Balance Details',
+          value: '$displayCurrency ${totalBalance.toStringAsFixed(2)}',
+          description: 'Net balance remaining (Earned - Redeemed).',
+          actionLabel: 'Incentive Report',
+          icon: Icons.monetization_on,
+          color: AppColors.accentBlue,
+          onTapAction: () {
+            Navigator.push(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    const AdminIncentiveReportScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+              ),
+            );
+          },
+        );
+      case 3:
+      default:
+        return _buildCardDetailsTile(
+          title: 'Salespersons Summary',
+          value: '$salespersonsCount Salespersons',
+          description: 'Total registered salespersons active in system.',
+          actionLabel: 'View Salespersons',
+          icon: Icons.people,
+          color: AppColors.secondaryTeal,
+          onTapAction: () {
+            Navigator.push(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    const AdminAllSalespersonOrdersScreen(),
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+              ),
+            );
+          },
+        );
+    }
+  }
+
+  Widget _buildCardDetailsTile({
+    required String title,
+    required String value,
+    required String description,
+    required String actionLabel,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTapAction,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textGrey,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textGrey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: onTapAction,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: color,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              actionLabel,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryCards(dynamic data) {
+    final rawCredit = data?.totalCredit ?? 0.0;
+    final rawDebit = data?.totalDebit ?? 0.0;
+    final rawBalance = data?.totalBalance ?? 0.0;
+
+    final totalCredit = CurrencyUtils.convertAmount(rawCredit, 'AED', _selectedCurrency);
+    final totalDebit = CurrencyUtils.convertAmount(rawDebit, 'AED', _selectedCurrency);
+    final totalBalance = CurrencyUtils.convertAmount(rawBalance, 'AED', _selectedCurrency);
+    final salespersonsCount = (data?.salespersons as List?)?.length ?? 0;
+
+    final displayCurrency =
+        _selectedCurrency == "-- Select Currency --" ? 'AED' : _selectedCurrency;
 
     return Column(
       children: [
@@ -183,37 +455,58 @@ class _AdminHomeScreen extends ConsumerWidget {
           children: [
             Expanded(
               child: _buildSummaryCard(
+                isSelected: _selectedAdminFilter == 0,
+                onTap: () {
+                  setState(() {
+                    _selectedAdminFilter = 0;
+                  });
+                },
                 topWidget: const Icon(
                   Icons.account_balance_wallet,
                   color: AppColors.approvedGreen,
                   size: 32,
                 ),
                 title: totalCredit.toStringAsFixed(2),
-                subtitle: 'Commission\nEarned',
+                subtitle: 'Commission\nEarned ($displayCurrency)',
+                titleColor: _selectedAdminFilter == 0 ? AppColors.approvedGreen : Colors.black,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _buildSummaryCard(
+                isSelected: _selectedAdminFilter == 1,
+                onTap: () {
+                  setState(() {
+                    _selectedAdminFilter = 1;
+                  });
+                },
                 topWidget: const Icon(
                   Icons.trending_down,
                   color: Colors.redAccent,
                   size: 32,
                 ),
                 title: totalDebit.toStringAsFixed(2),
-                subtitle: 'Commission\nRadeemed',
+                subtitle: 'Commission\nRedeemed ($displayCurrency)',
+                titleColor: _selectedAdminFilter == 1 ? Colors.redAccent : Colors.black,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _buildSummaryCard(
+                isSelected: _selectedAdminFilter == 2,
+                onTap: () {
+                  setState(() {
+                    _selectedAdminFilter = 2;
+                  });
+                },
                 topWidget: const Icon(
                   Icons.monetization_on,
                   color: AppColors.accentBlue,
                   size: 32,
                 ),
                 title: totalBalance.toStringAsFixed(2),
-                subtitle: 'Total\nBalance',
+                subtitle: 'Total\nBalance ($displayCurrency)',
+                titleColor: _selectedAdminFilter == 2 ? AppColors.accentBlue : Colors.black,
               ),
             ),
           ],
@@ -223,6 +516,12 @@ class _AdminHomeScreen extends ConsumerWidget {
           children: [
             Expanded(
               child: _buildSummaryCard(
+                isSelected: _selectedAdminFilter == 3,
+                onTap: () {
+                  setState(() {
+                    _selectedAdminFilter = 3;
+                  });
+                },
                 topWidget: const Icon(
                   Icons.people,
                   color: AppColors.secondaryTeal,
@@ -230,6 +529,7 @@ class _AdminHomeScreen extends ConsumerWidget {
                 ),
                 title: '$salespersonsCount',
                 subtitle: 'Total\nSalespersons',
+                titleColor: _selectedAdminFilter == 3 ? AppColors.secondaryTeal : Colors.black,
               ),
             ),
             const SizedBox(width: 8),
@@ -243,43 +543,70 @@ class _AdminHomeScreen extends ConsumerWidget {
   }
 
   Widget _buildSummaryCard({
+    required bool isSelected,
+    required VoidCallback onTap,
     Widget? topWidget,
     required String title,
     required String subtitle,
     Color titleColor = Colors.black,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (topWidget != null) topWidget else const SizedBox(height: 32),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: titleColor,
-            ),
+    final activeColor = isSelected ? AppColors.primaryBlue : Colors.grey.shade200;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primaryBlue.withValues(alpha: 0.05) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: activeColor,
+            width: isSelected ? 2.0 : 1.0,
           ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.black87,
-              height: 1.2,
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (topWidget != null) topWidget else const SizedBox(height: 32),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: titleColor,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: isSelected ? AppColors.primaryBlue : Colors.black87,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -376,38 +703,44 @@ class _AdminHomeScreen extends ConsumerWidget {
   }
 
   Widget _buildErrorState(BuildContext context, WidgetRef ref, String error) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 60, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(
-              'Error loading admin data',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.red.shade800,
-              ),
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading admin data',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textGrey),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => ref.refresh(allSalespersonOrdersProvider.future),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryBlue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textGrey),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => ref.refresh(allSalespersonOrdersProvider.future),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryBlue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Retry'),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -429,7 +762,7 @@ class _AdminHomeScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          user.displayName,
+                          widget.user.displayName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -453,8 +786,8 @@ class _AdminHomeScreen extends ConsumerWidget {
                             ),
                           ),
                           child: Text(
-                            user.formattedUserType.isNotEmpty
-                                ? user.formattedUserType
+                            widget.user.formattedUserType.isNotEmpty
+                                ? widget.user.formattedUserType
                                 : 'Admin',
                             style: const TextStyle(
                               color: AppColors.secondaryTeal,

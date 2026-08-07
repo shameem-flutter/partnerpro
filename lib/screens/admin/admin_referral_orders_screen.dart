@@ -38,37 +38,48 @@ class AdminReferralOrdersScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: _buildAppBar(context, ref),
-      body: Stack(
-        children: [
-          if (ordersAsync.hasValue)
-            _buildBody(
-              context,
-              ref,
-              ordersAsync.value!,
-              selectedId,
-              selectedCurrency,
-            )
-          else if (ordersAsync.isLoading)
-            const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
-              ),
-            )
-          else
-            _buildError(context, ref, ordersAsync.error!),
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(allReferralOrdersProvider.future),
+        child: Stack(
+          children: [
+            if (ordersAsync.hasValue)
+              _buildBody(
+                context,
+                ref,
+                ordersAsync.value!,
+                selectedId,
+                selectedCurrency,
+              )
+            else if (ordersAsync.isLoading)
+              SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.7,
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+                    ),
+                  ),
+                ),
+              )
+            else
+              _buildError(context, ref, ordersAsync.error!),
 
-          if (ordersAsync.hasValue && ordersAsync.isLoading)
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: LinearProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
-                backgroundColor: Colors.transparent,
-                minHeight: 3,
+            if (ordersAsync.hasValue && ordersAsync.isLoading)
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryBlue,
+                  ),
+                  backgroundColor: Colors.transparent,
+                  minHeight: 3,
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: Consumer(
         builder: (context, ref, child) {
@@ -647,8 +658,7 @@ class AdminReferralOrdersScreen extends ConsumerWidget {
 
     final selectedSet = ref.watch(selectedReferralsProvider);
     final bool isSelected = order.id != null && selectedSet.contains(order.id);
-    final bool isApproved =
-        order.isApproved || platformText.toLowerCase() == 'approved';
+    final bool isApproved = order.isApproved;
     final bool showCheckbox = order.id != null && !isApproved;
 
     return GestureDetector(
@@ -894,9 +904,7 @@ class AdminReferralOrdersScreen extends ConsumerWidget {
                 final selectedSet = sheetRef.watch(selectedReferralsProvider);
                 final bool isSelected =
                     order.id != null && selectedSet.contains(order.id);
-                final bool isApproved =
-                    order.isApproved ||
-                    order.platform.toLowerCase() == 'approved';
+                final bool isApproved = order.isApproved;
                 final bool canApprove = order.id != null && !isApproved;
 
                 return SingleChildScrollView(
@@ -1205,41 +1213,47 @@ class AdminReferralOrdersScreen extends ConsumerWidget {
         },
       );
     }
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 60, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(
-              'Error loading data',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.red.shade800,
-              ),
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading data',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error.toString(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textGrey),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    // ignore: unused_result
+                    ref.refresh(allReferralOrdersProvider.future);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryBlue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              error.toString(),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textGrey),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                // ignore: unused_result
-                ref.refresh(allReferralOrdersProvider.future);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryBlue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Retry'),
-            ),
-          ],
+          ),
         ),
       ),
     );
