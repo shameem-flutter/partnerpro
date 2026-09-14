@@ -4,6 +4,7 @@ import '../services/redemption_service.dart';
 import '../models/redemption_response.dart';
 import '../models/redemption_balance.dart';
 import '../models/sales_report.dart';
+import '../models/sales_agent_settings.dart';
 import 'auth_provider.dart';
 import 'dio_provider.dart';
 
@@ -28,6 +29,15 @@ final salesReportDataProvider = FutureProvider.autoDispose<SalesReportResponse>(
 
   final service = ref.watch(redemptionServiceProvider);
   return service.getSalesReport(accessToken: token);
+});
+
+final salesAgentSettingsProvider = FutureProvider.autoDispose<SalesAgentSettings>((ref) async {
+  final authState = ref.watch(authNotifierProvider);
+  final token = authState.session?.accessToken ?? '';
+  if (token.isEmpty) throw Exception('No auth token found');
+
+  final service = ref.watch(redemptionServiceProvider);
+  return service.getSettings(accessToken: token);
 });
 
 class RedemptionState {

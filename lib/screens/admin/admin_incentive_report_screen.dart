@@ -1,13 +1,10 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import '../../models/admin_models.dart';
 import '../../theme/app_colors.dart';
 import '../../providers/admin_provider.dart';
 import '../../utils/currency_utils.dart';
+import '../../utils/incentive_report_exporter.dart';
 import '../../widgets/admin_currency_dropdown.dart';
 
 class AdminIncentiveReportScreen extends ConsumerWidget {
@@ -92,19 +89,6 @@ class AdminIncentiveReportScreen extends ConsumerWidget {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('More options tapped'),
-              duration: Duration(seconds: 1),
-            ),
-          );
-        },
-        backgroundColor: const Color(0xFF032267),
-        shape: const CircleBorder(),
-        child: const Icon(Icons.more_horiz, color: Colors.white),
-      ),
     );
   }
 }
@@ -122,10 +106,10 @@ class _SalesReportContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dateRange = ref.watch(salesReportDateRangeProvider);
 
-    // Filter entries by date range
+    // Filter entries by date range while keeping backend statement ledger array order intact
     final entries = report.entries.where((entry) {
       if (dateRange != null) {
-        final parsed = DateTime.tryParse(entry.invoiceDate);
+        final parsed = DateTime.tryParse(entry.displayDate);
         if (parsed != null) {
           final start = DateTime(
             dateRange.start.year,
@@ -148,9 +132,6 @@ class _SalesReportContent extends ConsumerWidget {
       return true;
     }).toList();
 
-    // Sort entries by ID descending (latest first: 6, 3, 1...)
-    entries.sort((a, b) => b.id.compareTo(a.id));
-
     final displayCurrency = selectedCurrency == '-- Select Currency --'
         ? 'AED'
         : selectedCurrency;
@@ -162,6 +143,11 @@ class _SalesReportContent extends ConsumerWidget {
     );
     final convertedDebit = CurrencyUtils.convertAmount(
       report.totalDebit,
+      'AED',
+      selectedCurrency,
+    );
+    final convertedBalance = CurrencyUtils.convertAmount(
+      report.totalBalance,
       'AED',
       selectedCurrency,
     );
@@ -178,6 +164,8 @@ class _SalesReportContent extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             sliver: SliverToBoxAdapter(
               child: SummaryRowWidget(
+                totalBalance:
+                    '$displayCurrency ${convertedBalance.toStringAsFixed(2)}',
                 totalCredit:
                     '$displayCurrency ${convertedCredit.toStringAsFixed(2)}',
                 totalDebit:
@@ -266,7 +254,7 @@ class _SalesReportContent extends ConsumerWidget {
                           SizedBox(
                             width: 100,
                             child: Text(
-                              'RADEEMED',
+                              'REDEEMED',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 11,
@@ -424,16 +412,27 @@ class SummaryCard extends StatelessWidget {
 class SummaryRowWidget extends StatelessWidget {
   final String totalCredit;
   final String totalDebit;
+  final String? totalBalance;
 
   const SummaryRowWidget({
     super.key,
     required this.totalCredit,
     required this.totalDebit,
+    this.totalBalance,
   });
 
   @override
   Widget build(BuildContext context) {
     final cards = [
+      if (totalBalance != null)
+        SummaryCard(
+          title: 'Available Balance',
+          subtitle: 'Available Balance',
+          value: totalBalance!,
+          icon: Icons.account_balance_wallet_rounded,
+          iconColor: const Color(0xFF032267),
+          accentColor: const Color(0xFF032267),
+        ),
       SummaryCard(
         title: 'Total Credit',
         subtitle: 'Total Credit',
@@ -454,17 +453,15 @@ class SummaryRowWidget extends StatelessWidget {
 
     return SizedBox(
       height: 110,
-      child: Row(
-        children: cards
-            .map(
-              (c) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: c,
-                ),
-              ),
-            )
-            .toList(),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: cards.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) => SizedBox(
+          width: 155,
+          child: cards[index],
+        ),
       ),
     );
   }
@@ -617,160 +614,193 @@ class DateFilterRow extends ConsumerWidget {
             ),
           ],
           const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: () async {
-              final reportAsync = ref.read(salesReportProvider);
-              final reportData = reportAsync.value;
-              if (reportData == null || reportData.entries.isEmpty) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('No data available to export.'),
-                      backgroundColor: Colors.redAccent,
-                    ),
-                  );
-                }
-                return;
-              }
-
-              try {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Generating Excel sheet...'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
-                }
-
-                // Get date range and apply local filtering (same as UI)
-                final dateRange = ref.read(salesReportDateRangeProvider);
-                final entries = reportData.entries.where((entry) {
-                  if (dateRange != null) {
-                    final parsed = DateTime.tryParse(entry.invoiceDate);
-                    if (parsed != null) {
-                      final start = DateTime(
-                        dateRange.start.year,
-                        dateRange.start.month,
-                        dateRange.start.day,
-                      );
-                      final end = DateTime(
-                        dateRange.end.year,
-                        dateRange.end.month,
-                        dateRange.end.day,
-                        23,
-                        59,
-                        59,
-                      );
-                      if (parsed.isBefore(start) || parsed.isAfter(end)) {
-                        return false;
-                      }
-                    }
-                  }
-                  return true;
-                }).toList();
-
-                // Apply local sorting (same as UI)
-                entries.sort((a, b) => b.id.compareTo(a.id));
-
-                // Get currency and conversion target (same as UI)
-                final selectedCurrency = ref.read(adminCurrencyProvider);
-                final targetCurrency = (selectedCurrency == '-- Select Currency --' || selectedCurrency.isEmpty)
-                    ? 'AED'
-                    : selectedCurrency;
-
-                final bytes = await ExcelReportGenerator.generateIncentiveReport(
-                  entries: entries,
-                  reportData: reportData,
-                  targetCurrency: targetCurrency,
-                );
-
-                Directory? dir;
-                if (Platform.isAndroid) {
-                  try {
-                    final publicDownloadDir = Directory('/storage/emulated/0/Download');
-                    if (await publicDownloadDir.exists()) {
-                      final testFile = File('${publicDownloadDir.path}/.test_write');
-                      await testFile.writeAsString('test');
-                      await testFile.delete();
-                      dir = publicDownloadDir;
-                    }
-                  } catch (_) {}
-                }
-
-                if (dir == null) {
-                  try {
-                    dir = await getDownloadsDirectory();
-                  } catch (_) {}
-                }
-
-                if (dir == null && Platform.isAndroid) {
-                  try {
-                    final dirs = await getExternalStorageDirectories(
-                      type: StorageDirectory.downloads,
-                    );
-                    if (dirs != null && dirs.isNotEmpty) {
-                      dir = dirs.first;
-                    }
-                  } catch (_) {}
-                }
-
-                dir ??= await getTemporaryDirectory();
-
-                final file = File(
-                  '${dir.path}/Incentive_Report_${DateTime.now().millisecondsSinceEpoch}.xlsx',
-                );
-                await file.writeAsBytes(bytes);
-
-                await OpenFilex.open(file.path);
-
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Excel saved to Downloads/Files: ${file.path.split(Platform.pathSeparator).last}',
-                      ),
-                      backgroundColor: Colors.green,
-                      duration: const Duration(seconds: 4),
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error generating Excel: $e'),
-                      backgroundColor: Colors.redAccent,
-                    ),
-                  );
-                }
-              }
+          PopupMenuButton<String>(
+            tooltip: 'Export Report',
+            offset: const Offset(0, 46),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            color: Colors.white,
+            elevation: 4,
+            onSelected: (type) {
+              _handleExport(context, ref, isPdf: type == 'pdf');
             },
-            icon: Image.network(
-              'https://img.icons8.com/color/48/microsoft-excel-2019--v1.png',
-              width: 18,
-              height: 18,
-              errorBuilder: (context, error, stackTrace) =>
-                  const Icon(Icons.table_view, color: Colors.green, size: 18),
-            ),
-            label: const Text(
-              'Export',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'excel',
+                child: Row(
+                  children: [
+                    Image.network(
+                      'https://img.icons8.com/color/48/microsoft-excel-2019--v1.png',
+                      width: 22,
+                      height: 22,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.table_view, color: Colors.green, size: 22),
+                    ),
+                    const SizedBox(width: 10),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Excel Spreadsheet',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          'Export as .xlsx file',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF032267),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              shape: RoundedRectangleBorder(
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'pdf',
+                child: Row(
+                  children: [
+                    Image.network(
+                      'https://img.icons8.com/color/48/pdf.png',
+                      width: 22,
+                      height: 22,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.picture_as_pdf, color: Colors.red, size: 22),
+                    ),
+                    const SizedBox(width: 10),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'PDF Document',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          'Export as printable .pdf file',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFF032267),
                 borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.file_download_outlined,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                  SizedBox(width: 4),
+                  Text(
+                    'Export',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: 2),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ],
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _handleExport(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool isPdf,
+  }) async {
+    final reportAsync = ref.read(salesReportProvider);
+    final reportData = reportAsync.value;
+    if (reportData == null || reportData.entries.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No data available to export.'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    final dateRange = ref.read(salesReportDateRangeProvider);
+    final entries = reportData.entries.where((entry) {
+      if (dateRange != null) {
+        final parsed = DateTime.tryParse(entry.displayDate);
+        if (parsed != null) {
+          final start = DateTime(
+            dateRange.start.year,
+            dateRange.start.month,
+            dateRange.start.day,
+          );
+          final end = DateTime(
+            dateRange.end.year,
+            dateRange.end.month,
+            dateRange.end.day,
+            23,
+            59,
+            59,
+          );
+          if (parsed.isBefore(start) || parsed.isAfter(end)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }).toList();
+
+    final selectedCurrency = ref.read(adminCurrencyProvider);
+    final targetCurrency =
+        (selectedCurrency == '-- Select Currency --' ||
+            selectedCurrency.isEmpty)
+        ? 'AED'
+        : selectedCurrency;
+
+    await IncentiveReportExporter.exportReport(
+      context: context,
+      entries: entries,
+      reportData: reportData,
+      targetCurrency: targetCurrency,
+      isPdf: isPdf,
     );
   }
 
@@ -999,10 +1029,44 @@ class _SalesReportCardState extends State<SalesReportCard> {
 
   @override
   Widget build(BuildContext context) {
-    String formattedDate = widget.entry.invoiceDate;
-    final parsedDate = DateTime.tryParse(widget.entry.invoiceDate);
-    if (parsedDate != null) {
-      final months = [
+    final rawAppAt = widget.entry.approvedAt.trim();
+    final bool hasApproved =
+        rawAppAt.isNotEmpty &&
+        rawAppAt != 'null' &&
+        rawAppAt != 'None' &&
+        rawAppAt != 'False' &&
+        rawAppAt != 'false';
+
+    // No fallback: only show approved date if it exists, otherwise empty
+    String formattedApproved = '';
+    if (hasApproved) {
+      final parsed = DateTime.tryParse(rawAppAt);
+      if (parsed != null) {
+        const months = [
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dec',
+        ];
+        formattedApproved =
+            '${parsed.day} ${months[parsed.month - 1]} ${parsed.year}';
+      } else {
+        formattedApproved = rawAppAt;
+      }
+    }
+
+    String formattedInvoiceDate = widget.entry.invoiceDate;
+    final parsedInvoiceDate = DateTime.tryParse(widget.entry.invoiceDate);
+    if (parsedInvoiceDate != null) {
+      const months = [
         'Jan',
         'Feb',
         'Mar',
@@ -1016,9 +1080,12 @@ class _SalesReportCardState extends State<SalesReportCard> {
         'Nov',
         'Dec',
       ];
-      formattedDate =
-          '${parsedDate.day} ${months[parsedDate.month - 1]} ${parsedDate.year}';
+      formattedInvoiceDate =
+          '${parsedInvoiceDate.day} ${months[parsedInvoiceDate.month - 1]} ${parsedInvoiceDate.year}';
     }
+
+    // formattedApproved already built above — reuse it for the detail row
+    final String formattedApprovedDate = formattedApproved;
 
     final targetCurrency =
         (widget.selectedCurrency == '-- Select Currency --' ||
@@ -1078,23 +1145,45 @@ class _SalesReportCardState extends State<SalesReportCard> {
                       children: [
                         Row(
                           children: [
-                            const Icon(
-                              Icons.calendar_month_outlined,
-                              size: 14,
-                              color: Color(0xFF032267),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                formattedDate,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                  fontWeight: FontWeight.w500,
+                            if (formattedApproved.isNotEmpty) ...[
+                              const Icon(
+                                Icons.calendar_month_outlined,
+                                size: 14,
+                                color: Color(0xFF032267),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  formattedApproved,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ] else ...[
+                              Icon(
+                                Icons.schedule_rounded,
+                                size: 14,
+                                color: Colors.orange.shade700,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  formattedInvoiceDate.isNotEmpty
+                                      ? '$formattedInvoiceDate (Pending)'
+                                      : 'Pending Approval',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.orange.shade800,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -1171,12 +1260,14 @@ class _SalesReportCardState extends State<SalesReportCard> {
                         height: 44,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: convertedCredit > 0
-                              ? const Color(0xFFF0F9EB)
+                          color: convertedCredit != 0
+                              ? (convertedCredit < 0
+                                  ? const Color(0xFFFEF0F0)
+                                  : const Color(0xFFF0F9EB))
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: convertedCredit > 0
+                        child: convertedCredit != 0
                             ? FittedBox(
                                 fit: BoxFit.scaleDown,
                                 child: Padding(
@@ -1186,10 +1277,13 @@ class _SalesReportCardState extends State<SalesReportCard> {
                                   child: Text(
                                     '$displayCurrency ${convertedCredit.toStringAsFixed(2)}',
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF67C23A),
+                                      // Red for negative amounts, green for positive
+                                      color: convertedCredit < 0
+                                          ? const Color(0xFFF56C6C)
+                                          : const Color(0xFF67C23A),
                                     ),
                                   ),
                                 ),
@@ -1221,7 +1315,10 @@ class _SalesReportCardState extends State<SalesReportCard> {
                       if (widget.entry.platform.isNotEmpty &&
                           widget.entry.platform != 'False')
                         _buildDetailRow('Platform', widget.entry.platform),
-                      _buildDetailRow('Invoice Date', formattedDate),
+                      if (formattedInvoiceDate.isNotEmpty)
+                        _buildDetailRow('Invoice Date', formattedInvoiceDate),
+                      if (formattedApprovedDate.isNotEmpty)
+                        _buildDetailRow('Approved Date', formattedApprovedDate),
                       _buildDetailRow(
                         'Invoice Ref',
                         widget.entry.invoiceReferenceNo,
@@ -1242,6 +1339,12 @@ class _SalesReportCardState extends State<SalesReportCard> {
                             ? Colors.green.shade700
                             : Colors.orange.shade700,
                         isBadge: true,
+                      ),
+                      _buildDetailRow(
+                        'Running Balance',
+                        '$displayCurrency ${convertedBalance.toStringAsFixed(2)}',
+                        isBoldValue: true,
+                        valueColor: const Color(0xFF032267),
                       ),
                       const SizedBox(height: 8),
                       const Divider(
@@ -1555,396 +1658,5 @@ class ErrorState extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class ExcelReportGenerator {
-  static Future<List<int>> generateIncentiveReport({
-    required List<SalesReportEntry> entries,
-    required SalesReportResponse reportData,
-    required String targetCurrency,
-  }) async {
-    final xlsio.Workbook workbook = xlsio.Workbook();
-    final xlsio.Worksheet sheet = workbook.worksheets[0];
-    sheet.showGridlines = true;
-
-    // Apply Page Settings
-    _applyPageSettings(sheet);
-
-    // Create Report Header
-    _createReportHeader(sheet, workbook, targetCurrency);
-
-    // Create Table Header
-    _createTableHeader(sheet, workbook);
-
-    // Populate Data Rows
-    final int lastDataRow = _populateDataRows(sheet, workbook, entries, targetCurrency);
-
-    // Create Summary Section
-    final int summaryStartRow = lastDataRow + 2;
-    _createSummarySection(sheet, workbook, summaryStartRow, reportData, targetCurrency);
-
-    // Apply Auto Filter
-    sheet.autoFilters.filterRange = sheet.getRangeByIndex(5, 1, lastDataRow, 9);
-
-    // Freeze Headers
-    sheet.getRangeByIndex(6, 1).freezePanes();
-
-    // Auto Fit Columns
-    _autoFitWorksheet(sheet);
-
-    final List<int> bytes = workbook.saveAsStream();
-    workbook.dispose();
-    return bytes;
-  }
-
-  static void _applyPageSettings(xlsio.Worksheet sheet) {
-    final xlsio.PageSetup pageSetup = sheet.pageSetup;
-    pageSetup.orientation = xlsio.ExcelPageOrientation.landscape;
-    pageSetup.paperSize = xlsio.ExcelPaperSize.paperA4;
-    pageSetup.isFitToPage = true;
-    pageSetup.fitToPagesWide = 1;
-    pageSetup.fitToPagesTall = 0;
-    pageSetup.isCenterHorizontally = true;
-    pageSetup.isCenterVertically = false;
-    pageSetup.leftMargin = 0.5;
-    pageSetup.rightMargin = 0.5;
-    pageSetup.topMargin = 0.5;
-    pageSetup.bottomMargin = 0.5;
-  }
-
-  static void _createReportHeader(xlsio.Worksheet sheet, xlsio.Workbook workbook, String targetCurrency) {
-    // Merge cells for the title: A1 to I2
-    sheet.getRangeByIndex(1, 1, 2, 9).merge();
-    
-    final xlsio.Range titleCell = sheet.getRangeByIndex(1, 1);
-    titleCell.setText('INCENTIVE REPORT');
-    
-    final xlsio.Style titleStyle = workbook.styles.add('titleStyle');
-    titleStyle.backColor = '#1E3A8A';
-    titleStyle.fontColor = '#FFFFFF';
-    titleStyle.fontSize = 18;
-    titleStyle.bold = true;
-    titleStyle.hAlign = xlsio.HAlignType.center;
-    titleStyle.vAlign = xlsio.VAlignType.center;
-    
-    sheet.getRangeByIndex(1, 1, 2, 9).cellStyle = titleStyle;
-    sheet.getRangeByIndex(1, 1).rowHeight = 22;
-    sheet.getRangeByIndex(2, 1).rowHeight = 22;
-
-    // Metadata: Generated On and Currency
-    final xlsio.Style metaLabelStyle = workbook.styles.add('metaLabelStyle');
-    metaLabelStyle.fontSize = 10;
-    metaLabelStyle.bold = true;
-    metaLabelStyle.vAlign = xlsio.VAlignType.center;
-
-    final xlsio.Style metaValueStyle = workbook.styles.add('metaValueStyle');
-    metaValueStyle.fontSize = 10;
-    metaValueStyle.vAlign = xlsio.VAlignType.center;
-
-    // Row 3: Generated On
-    sheet.getRangeByIndex(3, 1).setText('Generated On :');
-    sheet.getRangeByIndex(3, 1).cellStyle = metaLabelStyle;
-    
-    sheet.getRangeByIndex(3, 2).setText(_formatDateTime(DateTime.now()));
-    sheet.getRangeByIndex(3, 2).cellStyle = metaValueStyle;
-    sheet.getRangeByIndex(3, 1).rowHeight = 20;
-
-    // Row 4: Currency
-    sheet.getRangeByIndex(4, 1).setText('Currency :');
-    sheet.getRangeByIndex(4, 1).cellStyle = metaLabelStyle;
-    
-    sheet.getRangeByIndex(4, 2).setText(targetCurrency);
-    sheet.getRangeByIndex(4, 2).cellStyle = metaValueStyle;
-    sheet.getRangeByIndex(4, 1).rowHeight = 20;
-  }
-
-  static void _createTableHeader(xlsio.Worksheet sheet, xlsio.Workbook workbook) {
-    final headers = [
-      'ID',
-      'Invoice Date',
-      'Invoice Reference',
-      'Customer Name',
-      'Platform',
-      'Currency',
-      'Debit',
-      'Credit',
-      'Balance'
-    ];
-
-    final xlsio.Style headerStyle = workbook.styles.add('headerStyle');
-    headerStyle.backColor = '#1E3A8A';
-    headerStyle.fontColor = '#FFFFFF';
-    headerStyle.bold = true;
-    headerStyle.fontSize = 11;
-    headerStyle.hAlign = xlsio.HAlignType.center;
-    headerStyle.vAlign = xlsio.VAlignType.center;
-    headerStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
-    headerStyle.borders.all.color = '#D3D3D3';
-
-    for (int col = 1; col <= headers.length; col++) {
-      final xlsio.Range cell = sheet.getRangeByIndex(5, col);
-      cell.setText(headers[col - 1]);
-      cell.cellStyle = headerStyle;
-    }
-    sheet.getRangeByIndex(5, 1).rowHeight = 25;
-  }
-
-  static int _populateDataRows(
-    xlsio.Worksheet sheet,
-    xlsio.Workbook workbook,
-    List<SalesReportEntry> entries,
-    String targetCurrency,
-  ) {
-    // Create shared styles
-    final leftOdd = _createCellStyle(workbook, 'leftOdd', null, xlsio.HAlignType.left);
-    final leftEven = _createCellStyle(workbook, 'leftEven', '#F7F9FC', xlsio.HAlignType.left);
-
-    final centerOdd = _createCellStyle(workbook, 'centerOdd', null, xlsio.HAlignType.center);
-    final centerEven = _createCellStyle(workbook, 'centerEven', '#F7F9FC', xlsio.HAlignType.center);
-
-    final dateOdd = _createCellStyle(workbook, 'dateOdd', null, xlsio.HAlignType.center, numberFormat: 'dd-mmm-yyyy');
-    final dateEven = _createCellStyle(workbook, 'dateEven', '#F7F9FC', xlsio.HAlignType.center, numberFormat: 'dd-mmm-yyyy');
-
-    final rightOdd = _createCellStyle(workbook, 'rightOdd', null, xlsio.HAlignType.right, numberFormat: '#,##0.00');
-    final rightEven = _createCellStyle(workbook, 'rightEven', '#F7F9FC', xlsio.HAlignType.right, numberFormat: '#,##0.00');
-
-    int currentRow = 6;
-    for (int i = 0; i < entries.length; i++) {
-      final entry = entries[i];
-      final isEven = i % 2 == 1;
-
-      final styleL = isEven ? leftEven : leftOdd;
-      final styleC = isEven ? centerEven : centerOdd;
-      final styleD = isEven ? dateEven : dateOdd;
-      final styleR = isEven ? rightEven : rightOdd;
-
-      final convertedDebit = CurrencyUtils.convertAmount(entry.debit, entry.currency, targetCurrency);
-      final convertedCredit = CurrencyUtils.convertAmount(entry.commissionAmount, entry.currency, targetCurrency);
-      final convertedBalance = CurrencyUtils.convertAmount(entry.balance, entry.currency, targetCurrency);
-
-      // 1. ID
-      final c1 = sheet.getRangeByIndex(currentRow, 1);
-      c1.setNumber((i + 1).toDouble());
-      c1.cellStyle = styleC;
-
-      // 2. Invoice Date
-      final c2 = sheet.getRangeByIndex(currentRow, 2);
-      final parsedDate = DateTime.tryParse(entry.invoiceDate);
-      if (parsedDate != null) {
-        c2.setDateTime(parsedDate);
-        c2.cellStyle = styleD;
-      } else {
-        c2.setText(entry.invoiceDate);
-        c2.cellStyle = styleC;
-      }
-
-      // 3. Invoice Reference
-      final c3 = sheet.getRangeByIndex(currentRow, 3);
-      c3.setText(entry.invoiceReferenceNo);
-      c3.cellStyle = styleL;
-
-      // 4. Customer Name
-      final c4 = sheet.getRangeByIndex(currentRow, 4);
-      c4.setText(entry.customerName);
-      c4.cellStyle = styleL;
-
-      // 5. Platform
-      final c5 = sheet.getRangeByIndex(currentRow, 5);
-      c5.setText(entry.platform);
-      c5.cellStyle = styleL;
-
-      // 6. Currency
-      final c6 = sheet.getRangeByIndex(currentRow, 6);
-      c6.setText(targetCurrency);
-      c6.cellStyle = styleC;
-
-      // 7. Debit
-      final c7 = sheet.getRangeByIndex(currentRow, 7);
-      c7.setNumber(convertedDebit);
-      c7.cellStyle = styleR;
-
-      // 8. Credit
-      final c8 = sheet.getRangeByIndex(currentRow, 8);
-      c8.setNumber(convertedCredit);
-      c8.cellStyle = styleR;
-
-      // 9. Balance
-      final c9 = sheet.getRangeByIndex(currentRow, 9);
-      c9.setNumber(convertedBalance);
-      c9.cellStyle = styleR;
-
-      sheet.getRangeByIndex(currentRow, 1).rowHeight = 20;
-      currentRow++;
-    }
-    return currentRow - 1;
-  }
-
-  static void _createSummarySection(
-    xlsio.Worksheet sheet,
-    xlsio.Workbook workbook,
-    int summaryStartRow,
-    SalesReportResponse reportData,
-    String targetCurrency,
-  ) {
-    // 1. Create styles
-    final xlsio.Style summaryLabelStyle = workbook.styles.add('summaryLabelStyle');
-    summaryLabelStyle.backColor = '#EEEEEE';
-    summaryLabelStyle.bold = true;
-    summaryLabelStyle.fontSize = 10;
-    summaryLabelStyle.hAlign = xlsio.HAlignType.left;
-    summaryLabelStyle.vAlign = xlsio.VAlignType.center;
-    summaryLabelStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
-    summaryLabelStyle.borders.all.color = '#D3D3D3';
-    summaryLabelStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-    final xlsio.Style summaryValueStyle = workbook.styles.add('summaryValueStyle');
-    summaryValueStyle.backColor = '#EEEEEE';
-    summaryValueStyle.bold = true;
-    summaryValueStyle.fontSize = 10;
-    summaryValueStyle.hAlign = xlsio.HAlignType.right;
-    summaryValueStyle.vAlign = xlsio.VAlignType.center;
-    summaryValueStyle.numberFormat = '#,##0.00';
-    summaryValueStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
-    summaryValueStyle.borders.all.color = '#D3D3D3';
-    summaryValueStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-    final xlsio.Style summaryEmptyStyle = workbook.styles.add('summaryEmptyStyle');
-    summaryEmptyStyle.backColor = '#EEEEEE';
-    summaryEmptyStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
-    summaryEmptyStyle.borders.all.color = '#D3D3D3';
-    summaryEmptyStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-    // Styles for rows 2 and 3 of summary (no thick top border)
-    final xlsio.Style summaryLabelStyleSub = workbook.styles.add('summaryLabelStyleSub');
-    summaryLabelStyleSub.backColor = '#EEEEEE';
-    summaryLabelStyleSub.bold = true;
-    summaryLabelStyleSub.fontSize = 10;
-    summaryLabelStyleSub.hAlign = xlsio.HAlignType.left;
-    summaryLabelStyleSub.vAlign = xlsio.VAlignType.center;
-    summaryLabelStyleSub.borders.all.lineStyle = xlsio.LineStyle.thin;
-    summaryLabelStyleSub.borders.all.color = '#D3D3D3';
-
-    final xlsio.Style summaryValueStyleSub = workbook.styles.add('summaryValueStyleSub');
-    summaryValueStyleSub.backColor = '#EEEEEE';
-    summaryValueStyleSub.bold = true;
-    summaryValueStyleSub.fontSize = 10;
-    summaryValueStyleSub.hAlign = xlsio.HAlignType.right;
-    summaryValueStyleSub.vAlign = xlsio.VAlignType.center;
-    summaryValueStyleSub.numberFormat = '#,##0.00';
-    summaryValueStyleSub.borders.all.lineStyle = xlsio.LineStyle.thin;
-    summaryValueStyleSub.borders.all.color = '#D3D3D3';
-
-    final xlsio.Style summaryEmptyStyleSub = workbook.styles.add('summaryEmptyStyleSub');
-    summaryEmptyStyleSub.backColor = '#EEEEEE';
-    summaryEmptyStyleSub.borders.all.lineStyle = xlsio.LineStyle.thin;
-    summaryEmptyStyleSub.borders.all.color = '#D3D3D3';
-
-    // Convert totals
-    final convertedTotalDebit = CurrencyUtils.convertAmount(reportData.totalDebit, 'AED', targetCurrency);
-    final convertedTotalCredit = CurrencyUtils.convertAmount(reportData.totalCommission, 'AED', targetCurrency);
-    final convertedTotalBalance = CurrencyUtils.convertAmount(reportData.totalAmount, 'AED', targetCurrency);
-
-    // Row 1: Total Debit
-    sheet.getRangeByIndex(summaryStartRow, 1, summaryStartRow, 5).merge();
-    sheet.getRangeByIndex(summaryStartRow, 1).setText('Total Debit');
-    for (int c = 1; c <= 9; c++) {
-      final cell = sheet.getRangeByIndex(summaryStartRow, c);
-      if (c <= 5) {
-        cell.cellStyle = summaryLabelStyle;
-      } else if (c == 6) {
-        cell.setText(targetCurrency);
-        cell.cellStyle = summaryLabelStyle;
-      } else if (c == 7) {
-        cell.setNumber(convertedTotalDebit);
-        cell.cellStyle = summaryValueStyle;
-      } else {
-        cell.cellStyle = summaryEmptyStyle;
-      }
-    }
-    sheet.getRangeByIndex(summaryStartRow, 1).rowHeight = 22;
-
-    // Row 2: Total Credit
-    final int summaryRow2 = summaryStartRow + 1;
-    sheet.getRangeByIndex(summaryRow2, 1, summaryRow2, 5).merge();
-    sheet.getRangeByIndex(summaryRow2, 1).setText('Total Credit');
-    for (int c = 1; c <= 9; c++) {
-      final cell = sheet.getRangeByIndex(summaryRow2, c);
-      if (c <= 5) {
-        cell.cellStyle = summaryLabelStyleSub;
-      } else if (c == 6) {
-        cell.setText(targetCurrency);
-        cell.cellStyle = summaryLabelStyleSub;
-      } else if (c == 8) {
-        cell.setNumber(convertedTotalCredit);
-        cell.cellStyle = summaryValueStyleSub;
-      } else {
-        cell.cellStyle = summaryEmptyStyleSub;
-      }
-    }
-    sheet.getRangeByIndex(summaryRow2, 1).rowHeight = 22;
-
-    // Row 3: Closing Balance
-    final int summaryRow3 = summaryRow2 + 1;
-    sheet.getRangeByIndex(summaryRow3, 1, summaryRow3, 5).merge();
-    sheet.getRangeByIndex(summaryRow3, 1).setText('Closing Balance');
-    for (int c = 1; c <= 9; c++) {
-      final cell = sheet.getRangeByIndex(summaryRow3, c);
-      if (c <= 5) {
-        cell.cellStyle = summaryLabelStyleSub;
-      } else if (c == 6) {
-        cell.setText(targetCurrency);
-        cell.cellStyle = summaryLabelStyleSub;
-      } else if (c == 9) {
-        cell.setNumber(convertedTotalBalance);
-        cell.cellStyle = summaryValueStyleSub;
-      } else {
-        cell.cellStyle = summaryEmptyStyleSub;
-      }
-    }
-    sheet.getRangeByIndex(summaryRow3, 1).rowHeight = 22;
-  }
-
-  static void _autoFitWorksheet(xlsio.Worksheet sheet) {
-    for (int col = 1; col <= 9; col++) {
-      sheet.autoFitColumn(col);
-      // Ensure a reasonable minimum width so headers aren't cramped
-      if (sheet.getRangeByIndex(1, col).columnWidth < 13.0) {
-        sheet.getRangeByIndex(1, col).columnWidth = 13.0;
-      }
-    }
-  }
-
-  static xlsio.Style _createCellStyle(
-    xlsio.Workbook wb,
-    String name,
-    String? backColor,
-    xlsio.HAlignType hAlign, {
-    String? numberFormat,
-  }) {
-    final xlsio.Style style = wb.styles.add(name);
-    style.fontSize = 10;
-    style.vAlign = xlsio.VAlignType.center;
-    style.hAlign = hAlign;
-    style.borders.all.lineStyle = xlsio.LineStyle.thin;
-    style.borders.all.color = '#E0E0E0';
-    if (backColor != null) {
-      style.backColor = backColor;
-    }
-    if (numberFormat != null) {
-      style.numberFormat = numberFormat;
-    }
-    return style;
-  }
-
-  static String _formatDateTime(DateTime dt) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    final day = dt.day.toString().padLeft(2, '0');
-    final month = months[dt.month - 1];
-    final year = dt.year;
-    final hour = dt.hour.toString().padLeft(2, '0');
-    final minute = dt.minute.toString().padLeft(2, '0');
-    final second = dt.second.toString().padLeft(2, '0');
-    return '$day-$month-$year $hour:$minute:$second';
   }
 }

@@ -658,6 +658,19 @@ class ViewMoreScreen extends ConsumerWidget {
           formattedDate = '$day/$month/$year';
         }
 
+        String formattedApproveDate = '';
+        final String rawApproveDate =
+            order.approvedAt.isNotEmpty ? order.approvedAt : order.invoiceDate;
+        final parsedApproveDate = DateTime.tryParse(rawApproveDate);
+        if (parsedApproveDate != null) {
+          final day = parsedApproveDate.day.toString().padLeft(2, '0');
+          final month = parsedApproveDate.month.toString().padLeft(2, '0');
+          final year = parsedApproveDate.year;
+          formattedApproveDate = '$day/$month/$year';
+        } else if (rawApproveDate.isNotEmpty) {
+          formattedApproveDate = rawApproveDate;
+        }
+
         return DraggableScrollableSheet(
           initialChildSize: 0.6,
           maxChildSize: 0.9,
@@ -688,12 +701,16 @@ class ViewMoreScreen extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          order.invoiceReferenceNo,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primaryBlue,
+                        Expanded(
+                          child: Text(
+                            formattedApproveDate.isNotEmpty
+                                ? 'Approve Date: $formattedApproveDate'
+                                : 'Approve Date: N/A',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryBlue,
+                            ),
                           ),
                         ),
                         Container(

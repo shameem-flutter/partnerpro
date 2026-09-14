@@ -44,7 +44,12 @@ class StatementScreen extends ConsumerWidget {
         ),
         body: SafeArea(
           child: RefreshIndicator(
-            onRefresh: () => ref.refresh(statementDataProvider.future),
+            onRefresh: () async {
+              await Future.wait([
+                ref.refresh(statementDataProvider.future),
+                ref.refresh(redemptionBalanceProvider.future),
+              ]);
+            },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
@@ -56,10 +61,17 @@ class StatementScreen extends ConsumerWidget {
                   (() {
                     if (statementAsync.hasValue) {
                       final data = statementAsync.value!;
-                      final totalBalance = data.orders.fold<double>(
-                        0.0,
-                        (sum, order) => sum + order.commissionAmountTotal,
-                      );
+                      final redemptionBalanceState =
+                          ref.watch(redemptionBalanceProvider);
+                      final totalBalance = redemptionBalanceState.hasValue
+                          ? (double.tryParse(
+                                redemptionBalanceState.value!.availableBalance,
+                              ) ??
+                              0.0)
+                          : data.orders.fold<double>(
+                              0.0,
+                              (sum, order) => sum + order.commissionAmountTotal,
+                            );
                       return Container(
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(20),
@@ -1040,6 +1052,7 @@ class RedemptionBottomSheetState extends ConsumerState<RedemptionBottomSheet> {
                 ),
               ),
             );
+            final navigator = Navigator.of(context);
 
             try {
               ref.invalidate(statementDataProvider);
@@ -1052,8 +1065,8 @@ class RedemptionBottomSheetState extends ConsumerState<RedemptionBottomSheet> {
             } catch (_) {}
 
             if (context.mounted) {
-              Navigator.of(context).pop(); // pop loader dialog
-              Navigator.of(context).pop(); // pop bottom sheet
+              navigator.pop(); // pop loader dialog
+              navigator.pop(); // pop bottom sheet
             }
           },
           style: ElevatedButton.styleFrom(

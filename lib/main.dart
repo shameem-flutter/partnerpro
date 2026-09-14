@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -18,13 +19,25 @@ import 'services/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await FirebaseMessaging.instance.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
-  await NotificationService.instance.initialize();
+
+  // Render first frame immediately to prevent startup ANR
   runApp(const ProviderScope(child: PartnerProApp()));
+
+  // Defer non-critical background services to post-frame / microtask execution
+  unawaited(_initBackgroundServices());
+}
+
+Future<void> _initBackgroundServices() async {
+  try {
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    await NotificationService.instance.initialize();
+  } catch (e) {
+    debugPrint('Background services initialization error: $e');
+  }
 }
 
 class PartnerProApp extends StatelessWidget {

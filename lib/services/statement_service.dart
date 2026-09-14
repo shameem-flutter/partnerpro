@@ -61,9 +61,8 @@ class StatementService {
     String? toDate,
   }) async {
     try {
-      final String path = (fromDate != null && toDate != null)
-          ? '/api/v1/sales-agent-management/filtered-sales-report/'
-          : '/api/v1/sales-agent-management/sales-report/';
+      final String path =
+          '/api/v1/sales-agent-management/sales-report-no-balance/';
 
       final url = await ApiConfig.getFullUrl(path);
 

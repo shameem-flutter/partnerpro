@@ -60,13 +60,13 @@ class UserCurrencyDropdown extends ConsumerWidget {
                 ref.read(userCurrencyProvider.notifier).state = newValue;
               }
             },
-            items: CurrencyUtils.currencies.map<DropdownMenuItem<String>>((
-              String value,
-            ) {
+            items: CurrencyUtils.currencies
+                .where((c) => c != '-- Select Currency --')
+                .map<DropdownMenuItem<String>>((String value) {
               return DropdownMenuItem<String>(
                 value: value,
                 child: Text(
-                  value == '-- Select Currency --' ? 'Default' : value,
+                  value,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: activeTextColor),
                 ),

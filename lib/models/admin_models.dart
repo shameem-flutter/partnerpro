@@ -87,6 +87,8 @@ class AllSalespersonOrdersResponse {
   final double totalCredit;
   final double totalBalance;
 
+  double get availableBalance => totalBalance;
+
   factory AllSalespersonOrdersResponse.fromJson(Map<String, dynamic> json) {
     final salespersonsRaw = json['salespersons'] as List? ?? [];
     final salespersons = salespersonsRaw
@@ -172,6 +174,8 @@ class AllReferralOrdersResponse {
   final double? totalBalance;
   final List<Salesperson> salespersons;
   final String? selectedSalespersonId;
+
+  double get availableBalance => totalBalance ?? 0.0;
 }
 
 class AdminReferralOrder {
@@ -340,6 +344,7 @@ class SalesReportEntry {
   const SalesReportEntry({
     required this.id,
     required this.invoiceDate,
+    required this.approvedAt,
     required this.invoiceReferenceNo,
     required this.customerName,
     required this.platform,
@@ -353,6 +358,7 @@ class SalesReportEntry {
 
   final int id;
   final String invoiceDate;
+  final String approvedAt;
   final String invoiceReferenceNo;
   final String customerName;
   final String platform;
@@ -363,17 +369,64 @@ class SalesReportEntry {
   final double debit;
   final double balance;
 
+  static String _cleanString(dynamic val) {
+    if (val == null) return '';
+    final str = val.toString().trim();
+    if (str == 'null' || str == 'None' || str == 'False' || str == 'false') {
+      return '';
+    }
+    return str;
+  }
+
+  /// Helper getter returning preferred date for display (approvedAt if available, otherwise invoiceDate)
+  String get displayDate {
+    final app = _cleanString(approvedAt);
+    return app.isNotEmpty ? app : invoiceDate;
+  }
+
+  SalesReportEntry copyWith({
+    int? id,
+    String? invoiceDate,
+    String? approvedAt,
+    String? invoiceReferenceNo,
+    String? customerName,
+    String? platform,
+    double? totalAmount,
+    double? commissionAmount,
+    String? currency,
+    bool? isApproved,
+    double? debit,
+    double? balance,
+  }) {
+    return SalesReportEntry(
+      id: id ?? this.id,
+      invoiceDate: invoiceDate ?? this.invoiceDate,
+      approvedAt: approvedAt ?? this.approvedAt,
+      invoiceReferenceNo: invoiceReferenceNo ?? this.invoiceReferenceNo,
+      customerName: customerName ?? this.customerName,
+      platform: platform ?? this.platform,
+      totalAmount: totalAmount ?? this.totalAmount,
+      commissionAmount: commissionAmount ?? this.commissionAmount,
+      currency: currency ?? this.currency,
+      isApproved: isApproved ?? this.isApproved,
+      debit: debit ?? this.debit,
+      balance: balance ?? this.balance,
+    );
+  }
+
   factory SalesReportEntry.fromJson(Map<String, dynamic> json) {
     final creditVal = _parseDouble(json['credit'] ?? json['commission_amount']);
+    final rawAppAt = _cleanString(json['approved_at']);
     final isApp = json['is_approved'] as bool? ??
         json['is_approve'] as bool? ??
-        false;
+        rawAppAt.isNotEmpty;
     return SalesReportEntry(
       id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
-      invoiceDate: json['invoice_date']?.toString() ?? '',
+      invoiceDate: _cleanString(json['invoice_date']),
+      approvedAt: rawAppAt,
       invoiceReferenceNo: json['invoice_reference_no']?.toString() ?? '',
       customerName: json['customer_name']?.toString() ?? '',
-      platform: json['platform']?.toString() ?? '',
+      platform: _cleanString(json['platform']),
       totalAmount: _parseDouble(json['currency_amount'] ?? json['total_amount']),
       commissionAmount: creditVal,
       currency: json['currency']?.toString() ?? 'AED',
@@ -407,9 +460,12 @@ class SalesReportResponse {
   final String salespersonName;
   final String salespersonId;
 
+  /// Total balance getter
+  double get totalBalance => totalAmount;
+
   factory SalesReportResponse.fromJson(Map<String, dynamic> json) {
     final ordersRaw = (json['sales_report'] ?? json['orders']) as List? ?? [];
-    final entries = ordersRaw
+    final rawEntries = ordersRaw
         .map((e) {
           final m = e is Map<String, dynamic>
               ? e
@@ -419,14 +475,40 @@ class SalesReportResponse {
         .whereType<SalesReportEntry>()
         .toList();
 
+    final calculatedEntries = _calculateRunningBalances(rawEntries);
+
     return SalesReportResponse(
-      entries: entries,
-      totalCommission: _parseDouble(json['total_credit'] ?? json['total_commission']),
+      entries: calculatedEntries,
+      totalCommission: _parseDouble(
+        json['historical_total_credit'] ??
+            json['total_credit'] ??
+            json['total_commission'],
+      ),
       totalAmount: _parseDouble(json['total_balance'] ?? json['total_amount']),
       totalDebit: _parseDouble(json['total_debit']),
       salespersonName: json['salesperson_name']?.toString() ?? '',
       salespersonId: json['salesperson_id']?.toString() ?? '',
     );
+  }
+
+  /// Calculates running balance starting from initial balance 0.0 at the first order (last item in raw response)
+  /// and accumulating towards the latest order (first item in raw response), preserving the raw response display order.
+  static List<SalesReportEntry> _calculateRunningBalances(List<SalesReportEntry> rawEntries) {
+    if (rawEntries.isEmpty) return [];
+
+    final balances = List<double>.filled(rawEntries.length, 0.0);
+    double currentBalance = 0.0;
+    for (int i = rawEntries.length - 1; i >= 0; i--) {
+      final entry = rawEntries[i];
+      currentBalance += (entry.commissionAmount - entry.debit);
+      balances[i] = double.parse(currentBalance.toStringAsFixed(2));
+    }
+
+    final List<SalesReportEntry> result = [];
+    for (int i = 0; i < rawEntries.length; i++) {
+      result.add(rawEntries[i].copyWith(balance: balances[i]));
+    }
+    return result;
   }
 
   static double _parseDouble(dynamic value) {

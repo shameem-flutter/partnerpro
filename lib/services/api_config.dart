@@ -1,12 +1,12 @@
 class ApiConfig {
   /// Base URL used by the Normal User features (login, orders, dashboard, etc.)
   static const String defaultBaseUrl =
-      'https://telescope-ids-seat-rrp.trycloudflare.com/';
+      'https://mega-ahead-hampshire-disclosure.trycloudflare.com/';
 
   /// Base URL used by the Admin features
   /// (all-salesperson-orders, all-referral-orders, sales-report, etc.)
   static const String adminBaseUrl =
-      'https://telescope-ids-seat-rrp.trycloudflare.com/';
+      'https://mega-ahead-hampshire-disclosure.trycloudflare.com/';
 
   // --------------------------------------------------------------------------
   // Public API

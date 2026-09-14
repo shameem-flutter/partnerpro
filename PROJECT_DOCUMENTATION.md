@@ -160,6 +160,7 @@ The API Layer contains safeguards for handling redirects, prepending proper prot
 | **Balance Redemption** | `https://partnerpro.saasorder.com` | `/api/v1/sales-agent-management/redemption/` |
 | **Redemption Balance** | `https://partnerpro.saasorder.com` | `/api/v1/sales-agent-management/redemption/balance/` |
 | **Redemption Convert** | `https://partnerpro.saasorder.com` | `/api/v1/sales-agent-management/redemption/convert/` |
+| **Sales Agent Settings** | `https://partnerpro.saasorder.com` | `/api/v1/sales-agent-management/settings/` |
 | **Admin All Salesperson Orders** | `adminBaseUrl` | `/api/v1/dashboard/all-salesperson-orders/` |
 | **Admin Sales Report** | `adminBaseUrl` | `/api/v1/sales-agent-management/staff/sales-report/` |
 | **Admin Referral Orders** | `adminBaseUrl` | `/api/v1/dashboard/all-referral-orders/` |

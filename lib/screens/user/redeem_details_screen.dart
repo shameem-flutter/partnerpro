@@ -4,6 +4,9 @@ import '../../theme/app_colors.dart';
 import '../../models/sales_report.dart';
 import '../../providers/redemption_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/statement_provider.dart';
+import '../../utils/currency_utils.dart';
+import '../../widgets/user_currency_dropdown.dart';
 import 'redeem_request_screen.dart';
 
 class RedeemDetailsScreen extends ConsumerWidget {
@@ -36,6 +39,8 @@ class RedeemDetailsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final salesReportState = ref.watch(salesReportDataProvider);
     final redemptionBalanceState = ref.watch(redemptionBalanceProvider);
+    final salesAgentSettingsState = ref.watch(salesAgentSettingsProvider);
+    final selectedCurrency = ref.watch(userCurrencyProvider);
 
     return PopScope(
       canPop: false,
@@ -61,6 +66,17 @@ class RedeemDetailsScreen extends ConsumerWidget {
               fontSize: 20,
             ),
           ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: UserCurrencyDropdown(
+                backgroundColor: AppColors.primaryBlue,
+                textColor: Colors.white,
+                borderColor: Colors.white.withValues(alpha: 0.3),
+                height: 38,
+              ),
+            ),
+          ],
         ),
         body: SafeArea(
           child: Column(
@@ -73,6 +89,7 @@ class RedeemDetailsScreen extends ConsumerWidget {
                     await Future.wait([
                       ref.refresh(salesReportDataProvider.future),
                       ref.refresh(redemptionBalanceProvider.future),
+                      ref.refresh(salesAgentSettingsProvider.future),
                     ]);
                   },
                   child: (() {
@@ -80,15 +97,39 @@ class RedeemDetailsScreen extends ConsumerWidget {
                         redemptionBalanceState.hasValue) {
                       final salesReport = salesReportState.value!;
                       final redemptionBalance = redemptionBalanceState.value!;
-                      final totalCredit =
+                      final minRedemptionAmount =
+                          salesAgentSettingsState.value?.minimumRedemptionAmount ??
+                          100.0;
+                      // All backend values are in AED — convert to selectedCurrency
+                      final totalCreditAed =
                           double.tryParse(salesReport.totalCredit) ?? 0.0;
-                      final totalDebit =
+                      final totalDebitAed =
                           double.tryParse(salesReport.totalDebit) ?? 0.0;
-                      final availableBalance =
+                      final availableBalanceAed =
                           double.tryParse(redemptionBalance.availableBalance) ??
                           0.0;
                       final hasPending = redemptionBalance.hasPendingRedemption;
                       final reportItems = salesReport.salesReport;
+
+                      // Display currency is always the user-selected one (default AED)
+                      final displayCurrency =
+                          selectedCurrency.isEmpty ? 'AED' : selectedCurrency;
+
+                      final totalCredit = CurrencyUtils.convertAmount(
+                        totalCreditAed,
+                        'AED',
+                        displayCurrency,
+                      );
+                      final totalDebit = CurrencyUtils.convertAmount(
+                        totalDebitAed,
+                        'AED',
+                        displayCurrency,
+                      );
+                      final availableBalance = CurrencyUtils.convertAmount(
+                        availableBalanceAed,
+                        'AED',
+                        displayCurrency,
+                      );
 
                       return LayoutBuilder(
                         builder: (context, constraints) {
@@ -107,14 +148,20 @@ class RedeemDetailsScreen extends ConsumerWidget {
                                           totalDebit,
                                           totalCredit,
                                           availableBalance,
+                                          availableBalanceAed,
+                                          minRedemptionAmount,
                                           hasPending,
+                                          displayCurrency,
                                         )
                                       : _buildDesktopMetrics(
                                           context,
                                           totalDebit,
                                           totalCredit,
                                           availableBalance,
+                                          availableBalanceAed,
+                                          minRedemptionAmount,
                                           hasPending,
+                                          displayCurrency,
                                         ),
                                 ),
 
@@ -136,7 +183,8 @@ class RedeemDetailsScreen extends ConsumerWidget {
                         },
                       );
                     } else if (salesReportState.isLoading ||
-                        redemptionBalanceState.isLoading) {
+                        redemptionBalanceState.isLoading ||
+                        salesAgentSettingsState.isLoading) {
                       return SingleChildScrollView(
                         physics: const AlwaysScrollableScrollPhysics(),
                         child: SizedBox(
@@ -150,13 +198,14 @@ class RedeemDetailsScreen extends ConsumerWidget {
                           ),
                         ),
                       );
-                      } else {
-                        final error =
-                            salesReportState.error ??
-                            redemptionBalanceState.error ??
-                            'Unknown error';
-                        return _buildErrorState(context, error, ref);
-                      }
+                    } else {
+                      final error =
+                          salesReportState.error ??
+                          redemptionBalanceState.error ??
+                          salesAgentSettingsState.error ??
+                          'Unknown error';
+                      return _buildErrorState(context, error, ref);
+                    }
                   })(),
                 ),
               ),
@@ -174,7 +223,10 @@ class RedeemDetailsScreen extends ConsumerWidget {
     double debit,
     double credit,
     double balance,
+    double balanceAed,
+    double minRedemptionAmount,
     bool hasPending,
+    String currencyCode,
   ) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -202,7 +254,7 @@ class RedeemDetailsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            balance.toStringAsFixed(2),
+            '${balance.toStringAsFixed(2)} $currencyCode',
             style: const TextStyle(
               fontSize: 38,
               fontWeight: FontWeight.bold,
@@ -247,8 +299,10 @@ class RedeemDetailsScreen extends ConsumerWidget {
               onPressed: hasPending
                   ? null
                   : () {
-                      if (balance < 250.0) {
-                        _showInsufficientBalanceDialog(context);
+                      // Always compare against the raw AED balance;
+                      // the minimum is an AED-only threshold.
+                      if (balanceAed < minRedemptionAmount) {
+                        _showInsufficientBalanceDialog(context, minRedemptionAmount);
                       } else {
                         Navigator.push(
                           context,
@@ -291,7 +345,7 @@ class RedeemDetailsScreen extends ConsumerWidget {
                 child: Column(
                   children: [
                     Text(
-                      debit.toStringAsFixed(0),
+                      '${debit.toStringAsFixed(0)} $currencyCode',
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -314,7 +368,7 @@ class RedeemDetailsScreen extends ConsumerWidget {
                 child: Column(
                   children: [
                     Text(
-                      credit.toStringAsFixed(2),
+                      '${credit.toStringAsFixed(2)} $currencyCode',
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -344,7 +398,10 @@ class RedeemDetailsScreen extends ConsumerWidget {
     double debit,
     double credit,
     double balance,
+    double balanceAed,
+    double minRedemptionAmount,
     bool hasPending,
+    String currencyCode,
   ) {
     return SizedBox(
       height: 180,
@@ -353,14 +410,14 @@ class RedeemDetailsScreen extends ConsumerWidget {
         children: [
           Expanded(
             child: _buildMetricCard(
-              value: debit.toStringAsFixed(0),
+              value: '${debit.toStringAsFixed(0)} $currencyCode',
               label: 'Total Debit',
             ),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: _buildMetricCard(
-              value: credit.toStringAsFixed(2),
+              value: '${credit.toStringAsFixed(2)} $currencyCode',
               label: 'Total Credit',
             ),
           ),
@@ -369,8 +426,11 @@ class RedeemDetailsScreen extends ConsumerWidget {
             child: _buildBalanceCard(
               context: context,
               balance: balance,
+              balanceAed: balanceAed,
+              minRedemptionAmount: minRedemptionAmount,
               label: 'Available Balance',
               hasPending: hasPending,
+              currencyCode: currencyCode,
             ),
           ),
         ],
@@ -429,13 +489,17 @@ class RedeemDetailsScreen extends ConsumerWidget {
               // Data Rows
               ...List.generate(items.length, (index) {
                 final item = items[index];
+                final currency =
+                    (item.currency.isEmpty || item.currency == 'False')
+                    ? 'AED'
+                    : item.currency;
                 return TableRow(
                   children: [
                     _buildBodyCell('${index + 1}'),
-                    _buildBodyCell(_formatDate(item.invoiceDate)),
+                    _buildBodyCell(_formatDate(item.displayDate)),
                     _buildBodyCell(item.customerName),
                     _buildBodyCell(item.currencyAmount),
-                    _buildBodyCell(item.currency),
+                    _buildBodyCell(currency),
                   ],
                 );
               }),
@@ -484,8 +548,11 @@ class RedeemDetailsScreen extends ConsumerWidget {
   Widget _buildBalanceCard({
     required BuildContext context,
     required double balance,
+    required double balanceAed,
+    required double minRedemptionAmount,
     required String label,
     required bool hasPending,
+    required String currencyCode,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -498,7 +565,7 @@ class RedeemDetailsScreen extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            balance.toStringAsFixed(2),
+            '${balance.toStringAsFixed(2)} $currencyCode',
             style: const TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.bold,
@@ -530,8 +597,10 @@ class RedeemDetailsScreen extends ConsumerWidget {
             onPressed: hasPending
                 ? null
                 : () {
-                    if (balance < 250.0) {
-                      _showInsufficientBalanceDialog(context);
+                    // Always compare against the raw AED balance;
+                    // the minimum is an AED-only threshold.
+                    if (balanceAed < minRedemptionAmount) {
+                      _showInsufficientBalanceDialog(context, minRedemptionAmount);
                     } else {
                       Navigator.push(
                         context,
@@ -677,7 +746,11 @@ class RedeemDetailsScreen extends ConsumerWidget {
     );
   }
 
-  void _showInsufficientBalanceDialog(BuildContext context) {
+  void _showInsufficientBalanceDialog(
+    BuildContext context,
+    double minAmount, [
+    String currencyCode = 'AED',
+  ]) {
     showDialog(
       context: context,
       builder: (context) {
@@ -723,9 +796,9 @@ class RedeemDetailsScreen extends ConsumerWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'A minimum balance of 250.00 AED is required to request redemption.',
-                  style: TextStyle(
+                Text(
+                  'A minimum balance of ${minAmount.toStringAsFixed(2)} $currencyCode is required to request redemption.',
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF545454),
                     height: 1.4,

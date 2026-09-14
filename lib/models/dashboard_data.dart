@@ -9,6 +9,7 @@ class DashboardData {
     required this.refApprovedOrdersCount,
     required this.refPendingOrdersCount,
     required this.referralOrders,
+    this.availableBalance = 0.0,
   });
 
   final List<DashboardOrder> orders;
@@ -20,6 +21,7 @@ class DashboardData {
   final int refApprovedOrdersCount;
   final int refPendingOrdersCount;
   final List<DashboardOrder> referralOrders;
+  final double availableBalance;
 
   factory DashboardData.fromJson(Map<dynamic, dynamic> json) {
     var ordersList = json['orders'] as List? ?? [];
@@ -33,13 +35,16 @@ class DashboardData {
     return DashboardData(
       orders: parsedOrders,
       todayDate: json['today_date']?.toString() ?? '',
-      totalCommission: _parseDouble(json['total_commission']),
+      totalCommission: _parseDouble(
+        json['historical_total_credit'] ?? json['total_commission'],
+      ),
       approvedOrdersCount: _parseInt(json['approved_orders_count']),
       pendingOrdersCount: _parseInt(json['pending_orders_count']),
       totalCommissionRef: _parseDouble(json['total_commission_ref']),
       refApprovedOrdersCount: _parseInt(json['ref_approved_orders_count']),
       refPendingOrdersCount: _parseInt(json['ref_pending_orders_count']),
       referralOrders: parsedRefOrders,
+      availableBalance: _parseDouble(json['available_balance']),
     );
   }
 
@@ -70,6 +75,7 @@ class DashboardOrder {
     required this.referralDetails,
     required this.commissionAmountTotal,
     required this.isApproved,
+    this.approvedAt = '',
   });
 
   final int? id;
@@ -84,6 +90,7 @@ class DashboardOrder {
   final List<ReferralDetail> referralDetails;
   final double commissionAmountTotal;
   final bool isApproved;
+  final String approvedAt;
 
   double get totalSubtotal {
     return invoiceDetails.fold(0.0, (sum, item) => sum + item.subtotal);
@@ -125,6 +132,7 @@ class DashboardOrder {
       referralDetails: parsedReferrals,
       commissionAmountTotal: parsedComm,
       isApproved: json['is_approved'] as bool? ?? json['is_approve'] as bool? ?? false,
+      approvedAt: json['approved_at']?.toString() ?? json['approved_date']?.toString() ?? json['approve_date']?.toString() ?? json['approval_date']?.toString() ?? '',
     );
   }
 

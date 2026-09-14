@@ -60,6 +60,7 @@ class DashboardService {
     try {
       final ordersUrl = await ApiConfig.getFullUrl('/api/v1/order-management/orders/');
       final referralOrdersUrl = await ApiConfig.getFullUrl('/api/v1/dashboard/referral-orders/');
+      final redemptionBalanceUrl = await ApiConfig.getFullUrl('/api/v1/sales-agent-management/redemption/balance/');
 
       final headers = <String, String>{
         'Authorization': 'Bearer $accessToken',
@@ -69,6 +70,9 @@ class DashboardService {
       final responses = await Future.wait([
         _dio.get<dynamic>(ordersUrl, options: Options(headers: headers)),
         _dio.get<dynamic>(referralOrdersUrl, options: Options(headers: headers)).catchError(
+          (_) => Response(requestOptions: RequestOptions()),
+        ),
+        _dio.get<dynamic>(redemptionBalanceUrl, options: Options(headers: headers)).catchError(
           (_) => Response(requestOptions: RequestOptions()),
         ),
       ]);
@@ -85,10 +89,22 @@ class DashboardService {
       }
       final normalizedRef = _normalizeMap(rawRefData) ?? {};
 
+      dynamic rawBalanceData = responses[2].data;
+      if (rawBalanceData is String) {
+        try {
+          rawBalanceData = jsonDecode(rawBalanceData);
+        } catch (_) {}
+      }
+      final normalizedBalance = _normalizeMap(rawBalanceData);
+
       final combinedData = <String, dynamic>{
         ...normalizedOrders,
         ...normalizedRef,
       };
+
+      if (normalizedBalance != null && normalizedBalance.containsKey('available_balance')) {
+        combinedData['available_balance'] = normalizedBalance['available_balance'];
+      }
 
       // OFF-THREAD OPTIMIZATION:
       // Moving the heavy filtering, mapping, and object instantiation 
@@ -152,12 +168,14 @@ DashboardData _processDashboardData(Map<String, dynamic> combinedData) {
     return refs.isEmpty;
   }).toList();
 
-  // Extract direct order metrics directly from API response if present
-  final double totalCommission = combinedData.containsKey('total_commission')
-      ? DashboardService._parseDouble(combinedData['total_commission'])
-      : directOrdersJson
-          .where((o) => o['is_approved'] == true)
-          .fold(0.0, (sum, o) => sum + DashboardService._parseDouble(o['commission_amount_total']));
+  // Extract direct order metrics directly from API response if present (preferring historical_total_credit)
+  final double totalCommission = combinedData.containsKey('historical_total_credit')
+      ? DashboardService._parseDouble(combinedData['historical_total_credit'])
+      : combinedData.containsKey('total_commission')
+          ? DashboardService._parseDouble(combinedData['total_commission'])
+          : directOrdersJson
+              .where((o) => o['is_approved'] == true)
+              .fold(0.0, (sum, o) => sum + DashboardService._parseDouble(o['commission_amount_total']));
 
   final int approvedOrdersCount = combinedData.containsKey('approved_orders_count')
       ? (combinedData['approved_orders_count'] is int
@@ -190,6 +208,10 @@ DashboardData _processDashboardData(Map<String, dynamic> combinedData) {
       ? combinedData['ref_pending_orders_count'] as int
       : int.tryParse(combinedData['ref_pending_orders_count']?.toString() ?? '') ?? 0;
 
+  final double availableBalance = DashboardService._parseDouble(
+    combinedData['available_balance'],
+  );
+
   final String todayDate = combinedData['today_date']?.toString().isNotEmpty == true
       ? combinedData['today_date'].toString()
       : DateTime.now().toIso8601String().split('T').first;
@@ -204,6 +226,7 @@ DashboardData _processDashboardData(Map<String, dynamic> combinedData) {
     'total_commission_ref': totalCommissionRef,
     'ref_approved_orders_count': refApprovedOrdersCount,
     'ref_pending_orders_count': refPendingOrdersCount,
+    'available_balance': availableBalance,
   };
 
   return DashboardData.fromJson(dashboardMap);

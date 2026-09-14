@@ -119,7 +119,7 @@ class _RedeemRequestScreenState extends ConsumerState<RedeemRequestScreen> {
     }
     final amount = double.tryParse(amountText);
     if (amount == null) {
-      _convertedAmountController.text = 'Invalid amount';
+      _convertedAmountController.text = '';
       return;
     }
     // Convert AED to selected currency
@@ -142,7 +142,7 @@ class _RedeemRequestScreenState extends ConsumerState<RedeemRequestScreen> {
     final token = authState.session?.accessToken ?? '';
     final countryCode = _countryCodes[_selectedCountry] ?? '';
     final ifscCode = _routingCodeController.text.trim();
-    final convertedAmount = _convertedAmountController.text.trim();
+    final requestedAmount = _amountController.text.trim();
 
     await ref
         .read(redemptionNotifierProvider.notifier)
@@ -152,7 +152,7 @@ class _RedeemRequestScreenState extends ConsumerState<RedeemRequestScreen> {
           accountName: _accountNameController.text.trim(),
           country: countryCode,
           ifscCode: ifscCode,
-          amount: convertedAmount,
+          amount: requestedAmount,
           currency: _selectedCurrency,
         );
 
@@ -264,6 +264,8 @@ class _RedeemRequestScreenState extends ConsumerState<RedeemRequestScreen> {
   Widget build(BuildContext context) {
     final dashboardState = ref.watch(dashboardDataProvider);
     final redemptionBalanceState = ref.watch(redemptionBalanceProvider);
+    final settingsState = ref.watch(salesAgentSettingsProvider);
+    final minRedemptionAmount = settingsState.value?.minimumRedemptionAmount ?? 100.0;
     final maxBalance = redemptionBalanceState.hasValue
         ? (double.tryParse(redemptionBalanceState.value!.availableBalance) ??
               0.0)
@@ -294,216 +296,222 @@ class _RedeemRequestScreenState extends ConsumerState<RedeemRequestScreen> {
             await Future.wait([
               ref.refresh(redemptionBalanceProvider.future),
               ref.refresh(dashboardDataProvider.future),
+              ref.refresh(salesAgentSettingsProvider.future),
             ]);
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16.0),
-          child: Form(
-            key: _formKey,
-            child: Card(
-              color: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20.0,
-                  vertical: 24.0,
+            child: Form(
+              key: _formKey,
+              child: Card(
+                color: Colors.white,
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Account Number
-                    _buildFormRow(
-                      label: 'Account Number',
-                      child: TextFormField(
-                        controller: _accountNumberController,
-                        keyboardType: TextInputType.text,
-                        decoration: _inputDecoration(),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Required';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Account Name
-                    _buildFormRow(
-                      label: 'Account Name',
-                      child: TextFormField(
-                        controller: _accountNameController,
-                        keyboardType: TextInputType.name,
-                        decoration: _inputDecoration(),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Required';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Country
-                    _buildFormRow(
-                      label: 'Country',
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _selectedCountry,
-                        decoration: _inputDecoration(),
-                        items: _countries.map((c) {
-                          return DropdownMenuItem(
-                            value: c,
-                            child: Text(
-                              c,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedCountry = val;
-                            _routingCodeController.clear();
-                          });
-                        },
-                        validator: (val) => val == null ? 'Required' : null,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Dynamic Routing Code (IFSC / IBAN / Routing Number)
-                    _buildFormRow(
-                      label: _routingCodeLabel,
-                      child: TextFormField(
-                        controller: _routingCodeController,
-                        keyboardType: TextInputType.text,
-                        decoration: _inputDecoration(
-                          helperText: _routingCodeHelperText,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20.0,
+                    vertical: 24.0,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Account Number
+                      _buildFormRow(
+                        label: 'Account Number',
+                        child: TextFormField(
+                          controller: _accountNumberController,
+                          keyboardType: TextInputType.text,
+                          decoration: _inputDecoration(),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Required';
+                            }
+                            return null;
+                          },
                         ),
-                        validator: _validateRoutingCode,
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                    // Amount (AED)
-                    _buildFormRow(
-                      label: 'Amount (AED)',
-                      child: TextFormField(
-                        controller: _amountController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                      // Account Name
+                      _buildFormRow(
+                        label: 'Account Name',
+                        child: TextFormField(
+                          controller: _accountNameController,
+                          keyboardType: TextInputType.name,
+                          decoration: _inputDecoration(),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Required';
+                            }
+                            return null;
+                          },
                         ),
-                        decoration: _inputDecoration(
-                          helperText:
-                              'Max available: AED ${maxBalance.toStringAsFixed(2)}',
-                        ),
-                        onChanged: (val) => _updateConvertedAmount(),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Required';
-                          }
-                          final amt = double.tryParse(value.trim());
-                          if (amt == null || amt <= 0) {
-                            return 'Must be greater than 0';
-                          }
-                          if (amt > maxBalance) {
-                            return 'Exceeds available balance';
-                          }
-                          return null;
-                        },
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                    // Currency
-                    _buildFormRow(
-                      label: 'Currency',
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _selectedCurrency,
-                        decoration: _inputDecoration(),
-                        items: _currencies.map((c) {
-                          return DropdownMenuItem(
-                            value: c,
-                            child: Text(
-                              c,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
+                      // Country
+                      _buildFormRow(
+                        label: 'Country',
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _selectedCountry,
+                          decoration: _inputDecoration(),
+                          items: _countries.map((c) {
+                            return DropdownMenuItem(
+                              value: c,
+                              child: Text(
+                                c,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
                             setState(() {
-                              _selectedCurrency = val;
-                              _updateConvertedAmount();
+                              _selectedCountry = val;
+                              _routingCodeController.clear();
                             });
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Converted Amount
-                    _buildFormRow(
-                      label: 'Converted Amount',
-                      child: TextFormField(
-                        controller: _convertedAmountController,
-                        readOnly: true,
-                        decoration: _inputDecoration(
-                          filledColor: const Color(0xFFF1F3F5),
+                          },
+                          validator: (val) => val == null ? 'Required' : null,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 32),
+                      const SizedBox(height: 16),
 
-                    // Submit Button
-                    SizedBox(
-                      width: 150,
-                      child: ElevatedButton(
-                        onPressed: redemptionState.isLoading
-                            ? null
-                            : () => _submitRedeem(maxBalance),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3F3D7A),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(4)),
+                      // Dynamic Routing Code (IFSC / IBAN / Routing Number)
+                      _buildFormRow(
+                        label: _routingCodeLabel,
+                        child: TextFormField(
+                          controller: _routingCodeController,
+                          keyboardType: TextInputType.text,
+                          decoration: _inputDecoration(
+                            helperText: _routingCodeHelperText,
                           ),
-                          elevation: 0,
+                          validator: _validateRoutingCode,
                         ),
-                        child: redemptionState.isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Amount (AED)
+                      _buildFormRow(
+                        label: 'Amount (AED)',
+                        child: TextFormField(
+                          controller: _amountController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: _inputDecoration(
+                            helperText:
+                                'Min: AED ${minRedemptionAmount.toStringAsFixed(2)} | Max available: AED ${maxBalance.toStringAsFixed(2)}',
+                          ),
+                          onChanged: (val) => _updateConvertedAmount(),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Required';
+                            }
+                            final amt = double.tryParse(value.trim());
+                            if (amt == null || amt <= 0) {
+                              return 'Must be greater than 0';
+                            }
+                            if (amt < minRedemptionAmount) {
+                              return 'Minimum redemption amount is AED ${minRedemptionAmount.toStringAsFixed(2)}';
+                            }
+                            if (amt > maxBalance) {
+                              return 'Exceeds available balance';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Currency
+                      _buildFormRow(
+                        label: 'Currency',
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _selectedCurrency,
+                          decoration: _inputDecoration(),
+                          items: _currencies.map((c) {
+                            return DropdownMenuItem(
+                              value: c,
+                              child: Text(
+                                c,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _selectedCurrency = val;
+                                _updateConvertedAmount();
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Converted Amount
+                      _buildFormRow(
+                        label: 'Converted Amount',
+                        child: TextFormField(
+                          controller: _convertedAmountController,
+                          readOnly: true,
+                          decoration: _inputDecoration(
+                            filledColor: const Color(0xFFF1F3F5),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Submit Button
+                      SizedBox(
+                        width: 150,
+                        child: ElevatedButton(
+                          onPressed: redemptionState.isLoading
+                              ? null
+                              : () => _submitRedeem(maxBalance),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3F3D7A),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(4),
+                              ),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: redemptionState.isLoading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Text(
+                                  'Redeem',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                              )
-                            : const Text(
-                                'Redeem',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildFormRow({required String label, required Widget child}) {

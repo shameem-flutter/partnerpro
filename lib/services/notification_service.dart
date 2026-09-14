@@ -2,17 +2,28 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../firebase_options.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // When an FCM message contains a `notification` payload, Android system FCM SDK
-  // automatically displays a system notification when the app is in background/terminated.
-  // We only trigger a local notification programmatically for data-only messages to prevent duplicates.
-  if (message.notification == null) {
-    await NotificationService.instance.showNotificationFromRemoteMessage(message);
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await NotificationService.instance.initialize();
+
+    // When an FCM message contains a `notification` payload, Android system FCM SDK
+    // automatically displays a system notification when the app is in background/terminated.
+    // We only trigger a local notification programmatically for data-only messages to prevent duplicates.
+    if (message.notification == null) {
+      await NotificationService.instance.showNotificationFromRemoteMessage(message);
+    }
+  } catch (e) {
+    debugPrint('Error in firebaseMessagingBackgroundHandler: $e');
   }
 }
 
@@ -72,10 +83,11 @@ class NotificationService {
   Future<Uint8List?> fetchImageBytes(String url) async {
     try {
       final client = HttpClient();
-      final request = await client.getUrl(Uri.parse(url));
-      final response = await request.close();
+      client.connectionTimeout = const Duration(seconds: 3);
+      final request = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 3));
+      final response = await request.close().timeout(const Duration(seconds: 3));
       if (response.statusCode == 200) {
-        final bytes = await consolidateHttpClientResponseBytes(response);
+        final bytes = await consolidateHttpClientResponseBytes(response).timeout(const Duration(seconds: 3));
         return bytes;
       }
     } catch (e) {
@@ -87,38 +99,41 @@ class NotificationService {
   /// to prevent Android's default CenterCrop behavior from cropping wide/tall logos.
   Future<Uint8List> createBigPictureBitmap(Uint8List imageBytes) async {
     try {
-      final ui.Codec codec = await ui.instantiateImageCodec(imageBytes);
-      final ui.FrameInfo frameInfo = await codec.getNextFrame();
-      final ui.Image image = frameInfo.image;
+      return await Future.microtask(() async {
+        final ui.Codec codec = await ui.instantiateImageCodec(imageBytes);
+        final ui.FrameInfo frameInfo = await codec.getNextFrame();
+        final ui.Image image = frameInfo.image;
 
-      // 16:9 standard ratio for BigPicture
-      const int canvasWidth = 1024;
-      const int canvasHeight = 576;
+        // 16:9 standard ratio for BigPicture
+        const int canvasWidth = 1024;
+        const int canvasHeight = 576;
 
-      final double width = image.width.toDouble();
-      final double height = image.height.toDouble();
+        final double width = image.width.toDouble();
+        final double height = image.height.toDouble();
 
-      final double scale = math.min(canvasWidth / width, canvasHeight / height);
-      final double scaledWidth = width * scale;
-      final double scaledHeight = height * scale;
+        final double scale = math.min(canvasWidth / width, canvasHeight / height);
+        final double scaledWidth = width * scale;
+        final double scaledHeight = height * scale;
 
-      final ui.PictureRecorder recorder = ui.PictureRecorder();
-      final ui.Canvas canvas = ui.Canvas(recorder);
+        final ui.PictureRecorder recorder = ui.PictureRecorder();
+        final ui.Canvas canvas = ui.Canvas(recorder);
 
-      final double left = (canvasWidth - scaledWidth) / 2.0;
-      final double top = (canvasHeight - scaledHeight) / 2.0;
+        final double left = (canvasWidth - scaledWidth) / 2.0;
+        final double top = (canvasHeight - scaledHeight) / 2.0;
 
-      final ui.Rect src = ui.Rect.fromLTWH(0, 0, width, height);
-      final ui.Rect dst = ui.Rect.fromLTWH(left, top, scaledWidth, scaledHeight);
-      canvas.drawImageRect(image, src, dst, ui.Paint());
+        final ui.Rect src = ui.Rect.fromLTWH(0, 0, width, height);
+        final ui.Rect dst = ui.Rect.fromLTWH(left, top, scaledWidth, scaledHeight);
+        canvas.drawImageRect(image, src, dst, ui.Paint());
 
-      final ui.Picture picture = recorder.endRecording();
-      final ui.Image paddedImage =
-          await picture.toImage(canvasWidth, canvasHeight);
-      final ByteData? byteData =
-          await paddedImage.toByteData(format: ui.ImageByteFormat.png);
+        final ui.Picture picture = recorder.endRecording();
+        final ui.Image paddedImage =
+            await picture.toImage(canvasWidth, canvasHeight);
+        final ByteData? byteData =
+            await paddedImage.toByteData(format: ui.ImageByteFormat.png);
 
-      if (byteData != null) return byteData.buffer.asUint8List();
+        if (byteData != null) return byteData.buffer.asUint8List();
+        return imageBytes;
+      }).timeout(const Duration(seconds: 2), onTimeout: () => imageBytes);
     } catch (e) {
       debugPrint('Error creating big picture padded bitmap: $e');
     }

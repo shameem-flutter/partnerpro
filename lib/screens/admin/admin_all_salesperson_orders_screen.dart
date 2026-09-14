@@ -339,6 +339,8 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
     );
   }
 
+
+
   Widget _buildSummaryRow(
     AllSalespersonOrdersResponse data,
     String selectedCurrency,
@@ -887,13 +889,6 @@ class AdminAllSalespersonOrdersScreen extends ConsumerWidget {
           final year = parsedDate.year;
           formattedDate = '$day/$month/$year';
         }
-
-        final double convertedCommVal = CurrencyUtils.convertAmount(
-          order.commissionAmountTotal,
-          order.currency,
-          selectedCurrency,
-        );
-        final String commText = convertedCommVal.toStringAsFixed(2);
 
         final String curText = selectedCurrency == '-- Select Currency --'
             ? (order.currency.isEmpty || order.currency == "False"

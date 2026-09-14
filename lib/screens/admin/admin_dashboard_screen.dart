@@ -37,7 +37,6 @@ class _AdminHomeScreen extends ConsumerStatefulWidget {
 
 class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
   String _selectedCurrency = 'AED';
-  int _selectedAdminFilter = 0; // 0: Commission Earned, 1: Commission Redeemed, 2: Total Balance, 3: Total Salespersons
 
 
   Widget _buildCurrencyDropdown() {
@@ -174,23 +173,6 @@ class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
   }
 
   Widget _buildDashboardContent(BuildContext context, dynamic data) {
-    String sectionTitle;
-    switch (_selectedAdminFilter) {
-      case 0:
-        sectionTitle = 'Commission Earned Overview';
-        break;
-      case 1:
-        sectionTitle = 'Commission Redeemed Overview';
-        break;
-      case 2:
-        sectionTitle = 'Total Balance Overview';
-        break;
-      case 3:
-      default:
-        sectionTitle = 'Salespersons Overview';
-        break;
-    }
-
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
@@ -235,203 +217,12 @@ class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
             ),
             const SizedBox(height: 20),
             _buildSummaryCards(data),
-            const SizedBox(height: 20),
-            _buildSectionHeader(sectionTitle),
-            const SizedBox(height: 12),
-            _buildSelectedCardDetails(context, data),
             const SizedBox(height: 24),
             _buildSectionHeader('Quick Navigation'),
             const SizedBox(height: 12),
             _buildQuickActions(context),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSelectedCardDetails(BuildContext context, dynamic data) {
-    final rawCredit = data?.totalCredit ?? 0.0;
-    final rawDebit = data?.totalDebit ?? 0.0;
-    final rawBalance = data?.totalBalance ?? 0.0;
-    final salespersonsCount = (data?.salespersons as List?)?.length ?? 0;
-
-    final totalCredit = CurrencyUtils.convertAmount(rawCredit, 'AED', _selectedCurrency);
-    final totalDebit = CurrencyUtils.convertAmount(rawDebit, 'AED', _selectedCurrency);
-    final totalBalance = CurrencyUtils.convertAmount(rawBalance, 'AED', _selectedCurrency);
-
-    final displayCurrency =
-        _selectedCurrency == "-- Select Currency --" ? 'AED' : _selectedCurrency;
-
-    switch (_selectedAdminFilter) {
-      case 0:
-        return _buildCardDetailsTile(
-          title: 'Commission Earned Details',
-          value: '$displayCurrency ${totalCredit.toStringAsFixed(2)}',
-          description: 'Total commission earned across all salesperson accounts.',
-          actionLabel: 'View Orders',
-          icon: Icons.account_balance_wallet,
-          color: AppColors.approvedGreen,
-          onTapAction: () {
-            Navigator.push(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                    const AdminAllSalespersonOrdersScreen(),
-                transitionDuration: Duration.zero,
-                reverseTransitionDuration: Duration.zero,
-              ),
-            );
-          },
-        );
-      case 1:
-        return _buildCardDetailsTile(
-          title: 'Commission Redeemed Details',
-          value: '$displayCurrency ${totalDebit.toStringAsFixed(2)}',
-          description: 'Total commission redeemed across all accounts.',
-          actionLabel: 'View Referrals',
-          icon: Icons.trending_down,
-          color: Colors.redAccent,
-          onTapAction: () {
-            Navigator.push(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                    const AdminAllReferralOrdersScreen(),
-                transitionDuration: Duration.zero,
-                reverseTransitionDuration: Duration.zero,
-              ),
-            );
-          },
-        );
-      case 2:
-        return _buildCardDetailsTile(
-          title: 'Total Balance Details',
-          value: '$displayCurrency ${totalBalance.toStringAsFixed(2)}',
-          description: 'Net balance remaining (Earned - Redeemed).',
-          actionLabel: 'Incentive Report',
-          icon: Icons.monetization_on,
-          color: AppColors.accentBlue,
-          onTapAction: () {
-            Navigator.push(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                    const AdminIncentiveReportScreen(),
-                transitionDuration: Duration.zero,
-                reverseTransitionDuration: Duration.zero,
-              ),
-            );
-          },
-        );
-      case 3:
-      default:
-        return _buildCardDetailsTile(
-          title: 'Salespersons Summary',
-          value: '$salespersonsCount Salespersons',
-          description: 'Total registered salespersons active in system.',
-          actionLabel: 'View Salespersons',
-          icon: Icons.people,
-          color: AppColors.secondaryTeal,
-          onTapAction: () {
-            Navigator.push(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                    const AdminAllSalespersonOrdersScreen(),
-                transitionDuration: Duration.zero,
-                reverseTransitionDuration: Duration.zero,
-              ),
-            );
-          },
-        );
-    }
-  }
-
-  Widget _buildCardDetailsTile({
-    required String title,
-    required String value,
-    required String description,
-    required String actionLabel,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTapAction,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 28),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textGrey,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  description,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textGrey,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: onTapAction,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              actionLabel,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -455,12 +246,6 @@ class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
           children: [
             Expanded(
               child: _buildSummaryCard(
-                isSelected: _selectedAdminFilter == 0,
-                onTap: () {
-                  setState(() {
-                    _selectedAdminFilter = 0;
-                  });
-                },
                 topWidget: const Icon(
                   Icons.account_balance_wallet,
                   color: AppColors.approvedGreen,
@@ -468,18 +253,12 @@ class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
                 ),
                 title: totalCredit.toStringAsFixed(2),
                 subtitle: 'Commission\nEarned ($displayCurrency)',
-                titleColor: _selectedAdminFilter == 0 ? AppColors.approvedGreen : Colors.black,
+                titleColor: AppColors.approvedGreen,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _buildSummaryCard(
-                isSelected: _selectedAdminFilter == 1,
-                onTap: () {
-                  setState(() {
-                    _selectedAdminFilter = 1;
-                  });
-                },
                 topWidget: const Icon(
                   Icons.trending_down,
                   color: Colors.redAccent,
@@ -487,18 +266,12 @@ class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
                 ),
                 title: totalDebit.toStringAsFixed(2),
                 subtitle: 'Commission\nRedeemed ($displayCurrency)',
-                titleColor: _selectedAdminFilter == 1 ? Colors.redAccent : Colors.black,
+                titleColor: Colors.redAccent,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _buildSummaryCard(
-                isSelected: _selectedAdminFilter == 2,
-                onTap: () {
-                  setState(() {
-                    _selectedAdminFilter = 2;
-                  });
-                },
                 topWidget: const Icon(
                   Icons.monetization_on,
                   color: AppColors.accentBlue,
@@ -506,7 +279,7 @@ class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
                 ),
                 title: totalBalance.toStringAsFixed(2),
                 subtitle: 'Total\nBalance ($displayCurrency)',
-                titleColor: _selectedAdminFilter == 2 ? AppColors.accentBlue : Colors.black,
+                titleColor: AppColors.accentBlue,
               ),
             ),
           ],
@@ -516,12 +289,6 @@ class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
           children: [
             Expanded(
               child: _buildSummaryCard(
-                isSelected: _selectedAdminFilter == 3,
-                onTap: () {
-                  setState(() {
-                    _selectedAdminFilter = 3;
-                  });
-                },
                 topWidget: const Icon(
                   Icons.people,
                   color: AppColors.secondaryTeal,
@@ -529,7 +296,7 @@ class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
                 ),
                 title: '$salespersonsCount',
                 subtitle: 'Total\nSalespersons',
-                titleColor: _selectedAdminFilter == 3 ? AppColors.secondaryTeal : Colors.black,
+                titleColor: AppColors.secondaryTeal,
               ),
             ),
             const SizedBox(width: 8),
@@ -543,70 +310,50 @@ class _AdminHomeScreenState extends ConsumerState<_AdminHomeScreen> {
   }
 
   Widget _buildSummaryCard({
-    required bool isSelected,
-    required VoidCallback onTap,
     Widget? topWidget,
     required String title,
     required String subtitle,
     Color titleColor = Colors.black,
   }) {
-    final activeColor = isSelected ? AppColors.primaryBlue : Colors.grey.shade200;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryBlue.withValues(alpha: 0.05) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: activeColor,
-            width: isSelected ? 2.0 : 1.0,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.12),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (topWidget != null) topWidget else const SizedBox(height: 32),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: titleColor,
-              ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (topWidget != null) topWidget else const SizedBox(height: 32),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: titleColor,
             ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? AppColors.primaryBlue : Colors.black87,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                height: 1.2,
-              ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black87,
+              height: 1.2,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -99,7 +100,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   AuthNotifier(this._authService, this._authStorage)
     : super(const AuthState(isInitializing: true)) {
-    _init();
+    Future.microtask(() => _init());
   }
 
   Future<void> _init() async {
@@ -108,14 +109,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (session != null) {
       // Re-initialise PermissionService from the stored token
       PermissionService.instance.initFromToken(session.accessToken);
-      _registerDevice(session.accessToken);
+      unawaited(_registerDevice(session.accessToken));
     }
     state = AuthState(session: session, isInitializing: false);
   }
 
   Future<void> _registerDevice(String accessToken) async {
     try {
-      final fcmToken = await FirebaseMessaging.instance.getToken();
+      final fcmToken = await FirebaseMessaging.instance
+          .getToken()
+          .timeout(const Duration(seconds: 5));
       if (fcmToken != null) {
         await _authService.registerDeviceToken(accessToken, fcmToken);
       }

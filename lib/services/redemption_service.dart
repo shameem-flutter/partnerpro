@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../models/redemption_response.dart';
 import '../models/redemption_balance.dart';
 import '../models/sales_report.dart';
+import '../models/sales_agent_settings.dart';
 import 'api_config.dart';
 
 class RedemptionService {
@@ -155,7 +156,9 @@ class RedemptionService {
     required String accessToken,
   }) async {
     try {
-      final salesReportUrl = await ApiConfig.getFullUrl('/api/v1/sales-agent-management/sales-report/');
+      final salesReportUrl = await ApiConfig.getFullUrl(
+        '/api/v1/sales-agent-management/sales-report-no-balance/',
+      );
       final response = await _dio.get<dynamic>(
         salesReportUrl,
         options: Options(
@@ -192,6 +195,50 @@ class RedemptionService {
       throw Exception(message);
     } catch (e) {
       throw Exception('Failed to fetch sales report: $e');
+    }
+  }
+
+  Future<SalesAgentSettings> getSettings({
+    required String accessToken,
+  }) async {
+    try {
+      final settingsUrl = await ApiConfig.getFullUrl('/api/v1/sales-agent-management/settings/');
+      final response = await _dio.get<dynamic>(
+        settingsUrl,
+        options: Options(
+          headers: <String, String>{
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      dynamic rawData = response.data;
+      if (rawData is String) {
+        rawData = jsonDecode(rawData);
+      }
+
+      final normalized = _normalizeMap(rawData);
+      if (normalized == null) {
+        throw Exception('Received invalid response format from server');
+      }
+
+      return SalesAgentSettings.fromJson(normalized);
+    } on DioException catch (e) {
+      dynamic errorData = e.response?.data;
+      if (errorData is String) {
+        try {
+          errorData = jsonDecode(errorData);
+        } catch (_) {}
+      }
+      final responseBody = _normalizeMap(errorData);
+      final defaultMsg = e.response != null
+          ? 'Failed to fetch settings. Server returned status code ${e.response?.statusCode}.'
+          : (e.message ?? 'Failed to fetch settings. Please try again.');
+      final message = _extractErrorMessage(responseBody, defaultMsg);
+      throw Exception(message);
+    } catch (e) {
+      throw Exception('Failed to fetch settings: $e');
     }
   }
 

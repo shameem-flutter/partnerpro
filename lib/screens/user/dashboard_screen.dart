@@ -5,6 +5,7 @@ import '../../models/dashboard_data.dart';
 import '../../theme/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/dashboard_provider.dart';
+import '../../providers/redemption_provider.dart';
 import '../../models/auth_session.dart';
 import '../../utils/currency_utils.dart';
 
@@ -22,9 +23,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   final int _referralLimit = 10;
   String _selectedCurrency = 'AED';
   int _selectedFilterDirect = 0; // 0: Total Commission, 1: Approved, 2: Pending
-  int _selectedFilterReferral = 0; // 0: Total Commission, 1: Approved, 2: Pending
-
-
+  int _selectedFilterReferral =
+      0; // 0: Total Commission, 1: Approved, 2: Pending
 
   @override
   Widget build(BuildContext context) {
@@ -183,7 +183,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               });
             }
           },
-          items: CurrencyUtils.currencies.map<DropdownMenuItem<String>>((String value) {
+          items: CurrencyUtils.currencies.map<DropdownMenuItem<String>>((
+            String value,
+          ) {
             return DropdownMenuItem<String>(value: value, child: Text(value));
           }).toList(),
         ),
@@ -197,7 +199,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required bool isReferral,
   }) {
     final ordersList = isReferral ? data.referralOrders : data.orders;
-    final selectedFilter = isReferral ? _selectedFilterReferral : _selectedFilterDirect;
+    final selectedFilter = isReferral
+        ? _selectedFilterReferral
+        : _selectedFilterDirect;
 
     List<DashboardOrder> filteredOrders;
     String headerTitle;
@@ -210,7 +214,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       headerTitle = isReferral ? 'Pending Referral Orders' : 'Pending Orders';
     } else {
       filteredOrders = ordersList;
-      headerTitle = isReferral ? 'Referral Commission Orders' : 'Total Commission Orders';
+      headerTitle = isReferral
+          ? 'Referral Commission Orders'
+          : 'Total Commission Orders';
     }
 
     final displayLimit = isReferral ? _referralLimit : _directLimit;
@@ -222,7 +228,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               : filteredOrders);
 
     return RefreshIndicator(
-      onRefresh: () => ref.refresh(dashboardDataProvider.future),
+      onRefresh: () async {
+        await Future.wait([
+          ref.refresh(dashboardDataProvider.future),
+          ref.refresh(redemptionBalanceProvider.future),
+        ]);
+      },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Padding(
@@ -245,6 +256,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ],
               ),
               const SizedBox(height: 16),
+              _buildAvailableBalanceCard(data, isReferral: isReferral),
+              const SizedBox(height: 12),
               _buildSummaryCards(data, isReferral: isReferral),
               const SizedBox(height: 24),
               _buildRecentOrdersHeader(title: headerTitle),
@@ -255,11 +268,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 40),
                     child: Text(
                       selectedFilter == 1
-                          ? (isReferral ? 'No approved referral orders found.' : 'No approved orders found.')
+                          ? (isReferral
+                                ? 'No approved referral orders found.'
+                                : 'No approved orders found.')
                           : selectedFilter == 2
-                              ? (isReferral ? 'No pending referral orders found.' : 'No pending orders found.')
-                              : (isReferral ? 'No referral orders found.' : 'No orders found.'),
-                      style: const TextStyle(color: AppColors.textGrey, fontSize: 16),
+                          ? (isReferral
+                                ? 'No pending referral orders found.'
+                                : 'No pending orders found.')
+                          : (isReferral
+                                ? 'No referral orders found.'
+                                : 'No orders found.'),
+                      style: const TextStyle(
+                        color: AppColors.textGrey,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 )
@@ -302,6 +324,73 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
+  Widget _buildAvailableBalanceCard(
+    DashboardData data, {
+    required bool isReferral,
+  }) {
+    final redemptionBalanceAsync = ref.watch(redemptionBalanceProvider);
+    final double rawBalance = redemptionBalanceAsync.hasValue
+        ? (double.tryParse(redemptionBalanceAsync.value!.availableBalance) ?? data.availableBalance)
+        : data.availableBalance;
+
+    final String displayCurrency = _selectedCurrency == "-- Select Currency --"
+        ? 'AED'
+        : _selectedCurrency;
+    final double convertedBalance = CurrencyUtils.convertAmount(
+      rawBalance > 0.0 ? rawBalance : data.availableBalance,
+      'AED',
+      _selectedCurrency,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: AppColors.primaryBlue,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Available Balance',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryBlue,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            '$displayCurrency ${convertedBalance.toStringAsFixed(2)}',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSummaryCards(DashboardData data, {required bool isReferral}) {
     final double commission = isReferral
         ? data.totalCommissionRef
@@ -313,21 +402,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ? data.refPendingOrdersCount
         : data.pendingOrdersCount;
 
-    final ordersList = isReferral ? data.referralOrders : data.orders;
-    final String orderCurrency =
-        ordersList.isNotEmpty && ordersList.first.currency.isNotEmpty
-        ? ordersList.first.currency
-        : 'AED';
-
-    final String displayCurrency =
-        _selectedCurrency == "-- Select Currency --" ? orderCurrency : _selectedCurrency;
+    final String displayCurrency = _selectedCurrency == "-- Select Currency --"
+        ? 'AED'
+        : _selectedCurrency;
     final double convertedCommission = CurrencyUtils.convertAmount(
       commission,
-      orderCurrency,
+      'AED',
       _selectedCurrency,
     );
 
-    final selectedFilter = isReferral ? _selectedFilterReferral : _selectedFilterDirect;
+    final selectedFilter = isReferral
+        ? _selectedFilterReferral
+        : _selectedFilterDirect;
 
     return Row(
       children: [
@@ -348,12 +434,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: selectedFilter == 0 ? AppColors.primaryBlue : Colors.black,
+                color: selectedFilter == 0
+                    ? AppColors.primaryBlue
+                    : Colors.black,
               ),
             ),
             title: convertedCommission.toStringAsFixed(2),
             subtitle: isReferral ? 'Referral\nCommission' : 'Total\nCommission',
-            titleColor: selectedFilter == 0 ? AppColors.primaryBlue : Colors.black,
+            titleColor: selectedFilter == 0
+                ? AppColors.primaryBlue
+                : Colors.black,
           ),
         ),
         const SizedBox(width: 8),
@@ -376,7 +466,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             title: '$approved',
             subtitle: 'Approved\norders',
-            titleColor: selectedFilter == 1 ? AppColors.approvedGreen : Colors.black,
+            titleColor: selectedFilter == 1
+                ? AppColors.approvedGreen
+                : Colors.black,
           ),
         ),
         const SizedBox(width: 8),
@@ -399,7 +491,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             title: '$pending',
             subtitle: 'Pending\norders',
-            titleColor: selectedFilter == 2 ? const Color(0xFFD97706) : Colors.black,
+            titleColor: selectedFilter == 2
+                ? const Color(0xFFD97706)
+                : Colors.black,
           ),
         ),
       ],
@@ -414,7 +508,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required String subtitle,
     Color titleColor = Colors.black,
   }) {
-    final activeColor = isSelected ? AppColors.primaryBlue : Colors.grey.shade200;
+    final activeColor = isSelected
+        ? AppColors.primaryBlue
+        : Colors.grey.shade200;
 
     return GestureDetector(
       onTap: onTap,
@@ -422,12 +518,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryBlue.withValues(alpha: 0.05) : Colors.white,
+          color: isSelected
+              ? AppColors.primaryBlue.withValues(alpha: 0.05)
+              : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: activeColor,
-            width: isSelected ? 2.0 : 1.0,
-          ),
+          border: Border.all(color: activeColor, width: isSelected ? 2.0 : 1.0),
           boxShadow: isSelected
               ? [
                   BoxShadow(
@@ -536,7 +631,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final String totalText = totalVal.toStringAsFixed(2);
 
     final String displayCurrency = _selectedCurrency == "-- Select Currency --"
-        ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency)
+        ? ((order.currency.isEmpty || order.currency == "False")
+              ? "AED"
+              : order.currency)
         : _selectedCurrency;
 
     final bool hasPlatform =
@@ -833,8 +930,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           formattedDate = '$day/$month/$year';
         }
 
-        final String displayCurrency = _selectedCurrency == "-- Select Currency --"
-            ? ((order.currency.isEmpty || order.currency == "False") ? "AED" : order.currency)
+        final String displayCurrency =
+            _selectedCurrency == "-- Select Currency --"
+            ? ((order.currency.isEmpty || order.currency == "False")
+                  ? "AED"
+                  : order.currency)
             : _selectedCurrency;
 
         final double commVal = CurrencyUtils.convertAmount(
@@ -846,9 +946,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ? commVal.toStringAsFixed(0)
             : commVal.toStringAsFixed(2);
 
-        final refText = order.invoiceReferenceNo.isNotEmpty
-            ? order.invoiceReferenceNo
-            : (order.id != null ? 'Ref #${order.id}' : 'N/A');
+        String formattedApproveDate = '';
+        final String rawApproveDate =
+            order.approvedAt.isNotEmpty ? order.approvedAt : order.invoiceDate;
+        final parsedApproveDate = DateTime.tryParse(rawApproveDate);
+        if (parsedApproveDate != null) {
+          final day = parsedApproveDate.day.toString().padLeft(2, '0');
+          final month = parsedApproveDate.month.toString().padLeft(2, '0');
+          final year = parsedApproveDate.year;
+          formattedApproveDate = '$day/$month/$year';
+        } else if (rawApproveDate.isNotEmpty) {
+          formattedApproveDate = rawApproveDate;
+        }
 
         final bool hasCustomer = order.customerName.isNotEmpty;
         final bool hasCompany = order.companyName.isNotEmpty;
@@ -888,12 +997,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          refText,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primaryBlue,
+                        Expanded(
+                          child: Text(
+                            formattedApproveDate.isNotEmpty
+                                ? 'Approve Date: $formattedApproveDate'
+                                : 'Approve Date: N/A',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryBlue,
+                            ),
                           ),
                         ),
                         Container(
@@ -916,7 +1029,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                       ],
                     ),
-                    if (formattedDate.isNotEmpty && widget.user.userType != 'referral_salesperson') ...[
+                    if (formattedDate.isNotEmpty &&
+                        widget.user.userType != 'referral_salesperson') ...[
                       const SizedBox(height: 8),
                       Text(
                         'Invoice Date: $formattedDate',

@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/foundation.dart'; // Added for kDebugMode
 import 'auth_provider.dart'; // Import to access authNotifierProvider
 
 class AuthInterceptor extends Interceptor {
